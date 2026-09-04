@@ -38,9 +38,18 @@ tutulur.
 ## Kurulum
 
 ```bash
-Scripts/build-app.sh --install
+Scripts/build-app.sh --install     # derler, imzalar, /Applications'a kurar
 open /Applications/PlaceTimer.app
 ```
+
+Sifirdan baslamak icin (mevcut veri yanina `.bak` olarak tasinir, silinmez):
+
+```bash
+Scripts/build-app.sh --fresh
+```
+
+Uygulamayi kaldirmak icin `/Applications/PlaceTimer.app` silinir; veri
+`~/Library/Application Support/PlaceTimer/` altinda kalir.
 
 Betik uygulamayi derler, `.app` paketini kurar ve makinedeki gelistirici
 sertifikasiyla imzalar. Izinler imzali bir bundle gerektirdigi icin imza adimi

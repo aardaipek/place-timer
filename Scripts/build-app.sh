@@ -6,7 +6,10 @@
 # imzalaniyor. Konum ve bildirim izinleri imzali bir bundle gerektirdigi icin
 # imza adimi opsiyonel degil.
 #
-# Kullanim:  Scripts/build-app.sh [--install]
+# Kullanim:
+#   Scripts/build-app.sh            paketi build/ altinda uretir
+#   Scripts/build-app.sh --install  /Applications'a kurar ve calistirir
+#   Scripts/build-app.sh --fresh    once tum uygulama verisini siler, sonra kurar
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -18,14 +21,54 @@ CONFIGURATION="release"
 APP_NAME="PlaceTimer"
 BUNDLE="build/${APP_NAME}.app"
 
-# Ilk kod imzalama kimligini kullan; --sign ile degistirilebilir.
-IDENTITY="${CODESIGN_IDENTITY:-$(security find-identity -v -p codesigning \
-  | grep -m1 '"' | sed 's/.*"\(.*\)"/\1/')}"
+# Imza kimligi SABIT olmalidir.
+#
+# macOS, verilen izinleri paket kimligi + imza ciftine bagliyor. Makinede
+# birden fazla sertifika varsa ve her derlemede rastgele biri secilirse, ayni
+# uygulama farkli takimlarla imzalanir; macOS bunu bambaska bir uygulama sayar
+# ve konum/bildirim izinleri sessizce sifirlanir. Bu yuzden kimlik
+# .codesign-identity dosyasinda tutulur.
+IDENTITY_FILE=".codesign-identity"
+
+if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
+  IDENTITY="$CODESIGN_IDENTITY"
+elif [[ -f "$IDENTITY_FILE" ]]; then
+  IDENTITY="$(tr -d '\n' < "$IDENTITY_FILE")"
+else
+  IDENTITY="$(security find-identity -v -p codesigning \
+    | grep -m1 '"' | sed 's/.*"\(.*\)"/\1/')"
+  if [[ -n "$IDENTITY" ]]; then
+    echo "$IDENTITY" > "$IDENTITY_FILE"
+    echo "==> Imza kimligi sabitlendi: $IDENTITY"
+    echo "    ($IDENTITY_FILE dosyasindan degistirebilirsiniz)"
+  fi
+fi
 
 if [[ -z "$IDENTITY" ]]; then
   echo "hata: kod imzalama kimligi bulunamadi." >&2
   echo "Xcode > Settings > Accounts uzerinden bir Apple hesabi ekleyin." >&2
   exit 1
+fi
+
+if ! security find-identity -v -p codesigning | grep -qF "$IDENTITY"; then
+  echo "hata: sabitlenmis imza kimligi bu makinede yok:" >&2
+  echo "  $IDENTITY" >&2
+  echo "Mevcut kimlikler:" >&2
+  security find-identity -v -p codesigning | grep '"' >&2
+  exit 1
+fi
+
+# Kurulu surum baska bir kimlikle imzalandiysa izinler sifirlanacak demektir.
+INSTALLED="/Applications/PlaceTimer.app"
+if [[ -d "$INSTALLED" ]]; then
+  PREVIOUS="$(codesign -dvvv "$INSTALLED" 2>&1 \
+    | sed -n 's/^Authority=\(Apple Development.*\)$/\1/p' | head -1)"
+  if [[ -n "$PREVIOUS" && "$PREVIOUS" != "$IDENTITY" ]]; then
+    echo "UYARI: kurulu surum farkli bir kimlikle imzalanmis." >&2
+    echo "  onceki: $PREVIOUS" >&2
+    echo "  simdi : $IDENTITY" >&2
+    echo "  Konum ve bildirim izinleri yeniden istenecek." >&2
+  fi
 fi
 
 echo "==> Derleniyor ($CONFIGURATION)"
@@ -45,7 +88,18 @@ codesign --verify --strict "$BUNDLE"
 
 echo "==> Hazir: $BUNDLE"
 
-if [[ "${1:-}" == "--install" ]]; then
+MODE="${1:-}"
+
+if [[ "$MODE" == "--fresh" ]]; then
+  DATA_DIR="$HOME/Library/Application Support/PlaceTimer"
+  if [[ -d "$DATA_DIR" ]]; then
+    BACKUP="${DATA_DIR}.$(date +%Y%m%d-%H%M%S).bak"
+    echo "==> Mevcut veri yedekleniyor: $BACKUP"
+    mv "$DATA_DIR" "$BACKUP"
+  fi
+fi
+
+if [[ "$MODE" == "--install" || "$MODE" == "--fresh" ]]; then
   # Acilista baslatma (SMAppService) uygulamanin sabit bir konumda
   # bulunmasini gerektirir; bu yuzden /Applications'a kopyalaniyor.
   echo "==> /Applications'a kuruluyor"
