@@ -1,3 +1,4 @@
+import AppKit
 import PlaceTimerCore
 import SwiftUI
 
@@ -85,7 +86,7 @@ public struct PanelView: View {
         VStack(alignment: .leading, spacing: 8) {
             if coordinator.needsLocationPermission || coordinator.needsNotificationPermission {
                 Button {
-                    OnboardingWindowPresenter.shared.present(coordinator: coordinator)
+                    (NSApp.delegate as? PlaceTimerAppDelegate)?.presentOnboarding()
                 } label: {
                     Label(missingPermissionText, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)

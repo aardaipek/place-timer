@@ -30,60 +30,45 @@ public struct PlaceTimerScene: Scene {
     }
 }
 
-/// Karşılama ekranını taşıyan pencere.
-///
-/// SwiftUI'nin `Window` sahnesi açılışta koşullu gösterime elverişli olmadığı
-/// için pencereyi doğrudan AppKit ile yönetiyoruz.
-@MainActor
-public final class OnboardingWindowPresenter {
-    public static let shared = OnboardingWindowPresenter()
-    private var window: NSWindow?
-
-    private init() {}
-
-    public func present(coordinator: AppCoordinator) {
-        // LSUIElement uygulamalar one gelemez; TCC diyalogunun gorunmesi icin
-        // pencere acikken gecici olarak normal uygulama gibi davraniyoruz.
-        NSApp.setActivationPolicy(.regular)
-
-        if let window {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-
-        let hosting = NSHostingController(
-            rootView: OnboardingView(coordinator: coordinator) { [weak self] in
-                self?.dismiss()
-            }
-        )
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "PlaceTimer"
-        window.styleMask = [.titled, .closable]
-        window.isReleasedWhenClosed = false
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        self.window = window
-    }
-
-    public func dismiss() {
-        window?.close()
-        NSApp.setActivationPolicy(.accessory)
-    }
-}
-
-/// Uygulamanın tek durum sahibi. Koordinatörü başlatır ve izin eksikse
-/// karşılama ekranını gösterir.
+/// Uygulamanın tek durum sahibi. Koordinatörü başlatır, izin sihirbazını ve
+/// yeni yer sorusunu kendi pencerelerinde gösterir.
 @MainActor
 public final class PlaceTimerAppDelegate: NSObject, NSApplicationDelegate {
     public let coordinator = AppCoordinator()
 
+    private let onboardingWindow = AppWindow(title: "PlaceTimer")
+    private let promptWindow = AppWindow(title: "Yeni yer")
+
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        // Yeni yer sorusu yalnızca panelde dursaydı kullanıcının menubar'a
+        // tıklaması gerekirdi; soruyu kendi penceresinde öne çıkarıyoruz.
+        coordinator.onPromptChange = { [weak self] prompt in
+            guard let self else { return }
+            guard let prompt else {
+                promptWindow.dismiss()
+                return
+            }
+            promptWindow.present {
+                PlacePromptView(prompt: prompt, coordinator: self.coordinator)
+                    .padding(20)
+                    .frame(width: 320)
+            }
+        }
+
         Task { @MainActor in
             await coordinator.start()
             if coordinator.needsLocationPermission || coordinator.needsNotificationPermission {
-                OnboardingWindowPresenter.shared.present(coordinator: coordinator)
+                presentOnboarding()
+            }
+        }
+    }
+
+    public func presentOnboarding() {
+        onboardingWindow.present { [weak self] in
+            if let self {
+                OnboardingView(coordinator: coordinator) { [weak self] in
+                    self?.onboardingWindow.dismiss()
+                }
             }
         }
     }

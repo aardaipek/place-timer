@@ -30,7 +30,16 @@ public final class AppCoordinator {
     public private(set) var elapsed: TimeInterval = 0
     public private(set) var activeSeconds: TimeInterval = 0
     public private(set) var todaySessions: [Session] = []
-    public private(set) var prompt: PlacePrompt?
+    public private(set) var prompt: PlacePrompt? {
+        didSet {
+            guard prompt != oldValue else { return }
+            onPromptChange?(prompt)
+        }
+    }
+
+    /// Yeni yer sorusu belirdiğinde/kaybolduğunda tetiklenir. Soruyu kendi
+    /// penceresinde gösterebilmek için uygulama katmanına bırakılıyor.
+    public var onPromptChange: ((PlacePrompt?) -> Void)?
     public private(set) var needsLocationPermission: Bool = false
     public private(set) var needsNotificationPermission: Bool = false
 
