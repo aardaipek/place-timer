@@ -79,7 +79,11 @@ public final class AppCoordinator {
         location.onAuthorizationChange = { [weak self] _ in
             guard let self else { return }
             refreshPermissionFlags()
-            if location.isAuthorized { location.startUpdating() }
+            guard location.isAuthorized else { return }
+            location.startUpdating()
+            // İzin yeni geldi: 10 saniyelik yoklama sırasını bekletmeden
+            // yeri hemen çöz, kullanıcı sonucu anında görsün.
+            ticksSinceNetworkCheck = Self.networkCheckInterval
         }
         refreshPermissionFlags()
         needsNotificationPermission = await notifier.authorizationStatus() != .authorized
@@ -101,11 +105,20 @@ public final class AppCoordinator {
         refreshDisplay()
     }
 
-    public func requestPermissions() async {
+    public func requestLocationPermission() {
         location.requestAuthorization()
+    }
+
+    public func requestNotificationPermission() async {
         await notifier.requestAuthorization()
+        await refreshPermissions()
+    }
+
+    /// İzin durumları uygulama dışında da değişebilir (Sistem Ayarları'ndan),
+    /// bu yüzden dışarıdan tazelenebilir olmalı.
+    public func refreshPermissions() async {
+        needsLocationPermission = !location.isAuthorized
         needsNotificationPermission = await notifier.authorizationStatus() != .authorized
-        refreshPermissionFlags()
     }
 
     private func refreshPermissionFlags() {

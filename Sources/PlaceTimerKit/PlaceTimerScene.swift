@@ -42,6 +42,10 @@ public final class OnboardingWindowPresenter {
     private init() {}
 
     public func present(coordinator: AppCoordinator) {
+        // LSUIElement uygulamalar one gelemez; TCC diyalogunun gorunmesi icin
+        // pencere acikken gecici olarak normal uygulama gibi davraniyoruz.
+        NSApp.setActivationPolicy(.regular)
+
         if let window {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -65,6 +69,7 @@ public final class OnboardingWindowPresenter {
 
     public func dismiss() {
         window?.close()
+        NSApp.setActivationPolicy(.accessory)
     }
 }
 
