@@ -29,9 +29,19 @@ harita üzerinde geofence, Screen Time entegrasyonu, ayarlar ekranı.
 
 ## 4. Yer Kimliği
 
-Bir yerin kimliği bağlı olunan **SSID**'dir. Yanında o yerde görülmüş
-BSSID'ler (access point MAC adresleri) ve ilk onay anındaki koordinat
-saklanır.
+Bir yerin kimliği bağlı olunan **SSID kümesidir**. Yanında o yerde
+görülmüş BSSID'ler (access point MAC adresleri) ve ilk onay anındaki
+koordinat saklanır.
+
+**Neden tek SSID değil (spike bulgusu):** Router'lar 2.4 GHz ve 5 GHz
+bantlarını çoğu zaman ayrı adlarla yayınlar (`Ev` ve `Ev-5G`). Mac bant
+değiştirdiğinde SSID değişir; tek SSID anahtar olsaydı bu, yer değişimi
+sanılıp oturumu boş yere sıfırlardı. Bu yüzden bir yer birden çok
+SSID'ye sahip olabilir.
+
+Tanınmayan bir SSID görüldüğünde, kayıtlı bir yerin 300 m çevresindeysek
+isim önerilerinin başına o yer gelir ("Burası *Ev* mi?"); kullanıcı
+onaylarsa SSID mevcut yere eklenir, yeni yer açılmaz.
 
 **Neden sadece BSSID değil:** Kafelerin ve ev mesh sistemlerinin
 birden fazla access point'i olur. Masa değiştirince BSSID değişir;
@@ -132,7 +142,7 @@ atomik yazımla:
 
 | Dosya | İçerik |
 |---|---|
-| `places.json` | `[{id, ssid, bssids[], displayName, lat, lon, createdAt}]` |
+| `places.json` | `[{id, ssids[], bssids[], displayName, lat, lon, createdAt}]` |
 | `sessions.json` | `[{id, placeId, startedAt, endedAt, activeSeconds}]` |
 | `state.json` | Açık oturum + son uyku anı + gönderilmiş bildirim sınırları |
 
@@ -188,18 +198,23 @@ Servis katmanı ince sarmalayıcı olduğundan elle doğrulanır.
 
 ## 11. Riskler ve İnşa Sırası
 
-**Ana risk:** macOS 14'ten beri SSID okuma Konum Servisleri iznine
-bağlı. macOS 27'de imzalı bir bundle'dan SSID/BSSID'nin gerçekten
-okunabildiği **doğrulanmamıştır**. Okunamıyorsa yer tespiti stratejisi
-baştan seçilmelidir.
+**Ana risk (çözüldü — 2026-09-04):** macOS 14'ten beri SSID okuma
+Konum Servisleri iznine bağlı; macOS 27'de de öyle olduğu ölçüldü.
+İmzalı bir bundle'da izinden önce `ssid` ve `bssid` `nil` dönüyor,
+izin verildiği anda ikisi de okunabiliyor. Tasarım geçerli.
 
-Bu yüzden inşa sırası:
+`requestWhenInUseAuthorization()` macOS'ta `authorizedAlways`
+statüsünü veriyor; `authorizedWhenInUse` bu platformda yok.
+TCC kararı ile CoreWLAN'ın onu görmesi arasında kısa bir gecikme
+olabiliyor — okuma yeniden denenebilir olmalı.
 
-1. **SSID doğrulama denemesi** — imzalı minimal bundle, konum izni
-   iste, SSID + BSSID yazdır. Riskli varsayım ilk gün ölçülür.
+İnşa sırası:
+
+1. ~~SSID doğrulama denemesi~~ — tamamlandı
 2. `SessionEngine` + testleri
-3. Servis katmanı
-4. Arayüz ve karşılama akışı
+3. Depolama katmanı
+4. Servis katmanı
+5. Arayüz ve karşılama akışı
 
 ## 12. Ortam Notu
 
