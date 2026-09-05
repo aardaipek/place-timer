@@ -42,6 +42,7 @@ public final class PlaceTimerAppDelegate: NSObject, NSApplicationDelegate {
 
     private let onboardingWindow = AppWindow(title: "PlaceTimer")
     private let promptWindow = AppWindow(title: "Yeni yer")
+    private let settingsWindow = AppWindow(title: "PlaceTimer Ayarları")
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // Yeni yer sorusu yalnızca panelde dursaydı kullanıcının menubar'a
@@ -64,6 +65,12 @@ public final class PlaceTimerAppDelegate: NSObject, NSApplicationDelegate {
             if coordinator.needsLocationPermission || coordinator.needsNotificationPermission {
                 presentOnboarding()
             }
+        }
+    }
+
+    public func presentSettings() {
+        settingsWindow.present { [weak self] in
+            if let self { SettingsView(coordinator: coordinator) }
         }
     }
 
