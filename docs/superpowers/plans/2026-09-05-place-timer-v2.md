@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Minimum macOS 26.** `Package.swift` → `platforms: [.macOS(.v26)]`. Liquid Glass API'leri (`glassEffect`, `GlassEffectContainer`, `.buttonStyle(.glass)`, `.glassProminent`) bu sürümde geldi.
+- **Minimum macOS 26.** `Package.swift` → `platforms: [.macOS(.v26)]` **ve** `// swift-tools-version: 6.2`. `.v26` sabiti `@available(_PackageDescription 6.2)` ile kilitli; tools-version 6.0'da `'v26' is unavailable` hatası verir. Liquid Glass API'leri (`glassEffect`, `GlassEffectContainer`, `.buttonStyle(.glass)`, `.glassProminent`) bu sürümde geldi.
 - **Tüm `swift` komutları** `DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer` öneki ile çalıştırılır. Makinede `xcode-select` hâlâ Command Line Tools'u gösteriyor; `sudo` gerekmez.
 - **`PlaceTimerCore` hiçbir sistem çerçevesi import etmez.** Yalnızca `Foundation`. AppKit, SwiftUI, CoreLocation, CoreWLAN, MapKit yasak — bu hedefin testlenebilirliğinin tek güvencesi budur.
 - **Derleme uyarısız olmalı:** `swift build -Xswiftc -warnings-as-errors` temiz geçmeli. Swift 6 strict concurrency açık.
@@ -87,9 +87,12 @@ Mevcut testler: `Tests/PlaceTimerCoreTests/SessionEngineTests.swift`, `PlaceCata
 
 - [ ] **Step 1: Dağıtım hedefini yükselt**
 
-`Package.swift` içinde tek satır:
+`Package.swift` içinde iki satır — ilk satırdaki tools-version da yükselmeli,
+`.v26` sabiti `@available(_PackageDescription 6.2)` ile kilitli:
 
 ```swift
+// swift-tools-version: 6.2
+...
 platforms: [.macOS(.v26)],
 ```
 
