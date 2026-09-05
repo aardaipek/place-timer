@@ -25,8 +25,12 @@ public struct PlaceTimerScene: Scene {
 
     private var menuBarTitle: String {
         guard !coordinator.needsLocationPermission else { return "◷ İzin gerekli" }
-        let name = DurationFormat.truncate(coordinator.placeName)
-        return "\(name) · \(DurationFormat.clock(coordinator.elapsed))"
+        let time = DurationFormat.clock(
+            coordinator.elapsed,
+            showSeconds: coordinator.preferences.showSeconds
+        )
+        guard coordinator.preferences.showPlaceNameInMenuBar else { return time }
+        return "\(DurationFormat.truncate(coordinator.placeName)) · \(time)"
     }
 }
 
@@ -38,6 +42,7 @@ public final class PlaceTimerAppDelegate: NSObject, NSApplicationDelegate {
 
     private let onboardingWindow = AppWindow(title: "PlaceTimer")
     private let promptWindow = AppWindow(title: "Yeni yer")
+    private let settingsWindow = AppWindow(title: "PlaceTimer Ayarları")
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // Yeni yer sorusu yalnızca panelde dursaydı kullanıcının menubar'a
@@ -60,6 +65,12 @@ public final class PlaceTimerAppDelegate: NSObject, NSApplicationDelegate {
             if coordinator.needsLocationPermission || coordinator.needsNotificationPermission {
                 presentOnboarding()
             }
+        }
+    }
+
+    public func presentSettings() {
+        settingsWindow.present { [weak self] in
+            if let self { SettingsView(coordinator: coordinator) }
         }
     }
 

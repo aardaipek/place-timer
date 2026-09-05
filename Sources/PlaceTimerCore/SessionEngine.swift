@@ -12,7 +12,7 @@ public struct SessionEngine: Sendable {
     public private(set) var isAsleep: Bool
     public private(set) var isScreenLocked: Bool
 
-    public let configuration: EngineConfiguration
+    public private(set) var configuration: EngineConfiguration
 
     private var sleepStartedAt: Date?
     /// Uyandıktan sonraki ilk yer çözümlemesine kadar taşınır. Yer uyku
@@ -43,6 +43,29 @@ public struct SessionEngine: Sendable {
         currentSession?.activeSeconds ?? 0
     }
 
+    /// Ayarlar değişince yapılandırmayı, açık oturumu bozmadan günceller.
+    ///
+    /// Bildirim aralığı değişirse geçmiş işaretler dolu sayılır. Aksi halde
+    /// saatlikten 30 dakikalığa geçildiğinde o ana kadar birikmiş bütün
+    /// bildirimler topluca düşerdi.
+    public mutating func updateConfiguration(
+        _ configuration: EngineConfiguration,
+        at now: Date
+    ) {
+        let previousInterval = self.configuration.notificationInterval
+        self.configuration = configuration
+
+        guard
+            configuration.notificationInterval != previousInterval,
+            let interval = configuration.notificationInterval, interval > 0,
+            var session = currentSession
+        else { return }
+
+        let passed = Int(session.elapsed(at: now) / interval)
+        session.notifiedMarks = passed >= 1 ? Set(1...passed) : []
+        currentSession = session
+    }
+
     @discardableResult
     public mutating func handle(_ event: SessionEvent, at now: Date) -> [SessionEffect] {
         switch event {
@@ -62,6 +85,8 @@ public struct SessionEngine: Sendable {
             return handlePlaceResolved(place, at: now)
         case .tick(let idleSeconds):
             return handleTick(idleSeconds: idleSeconds, at: now)
+        case .endSessionRequested:
+            return handleEndSessionRequested(at: now)
         }
     }
 
@@ -86,6 +111,17 @@ public struct SessionEngine: Sendable {
         // Kısa mola: oturum sürüyor, ama yerin değişmediğini henüz bilmiyoruz.
         pendingSleepStart = sleptAt
         return currentSession == nil ? [startSession(at: now)] : []
+    }
+
+    /// Oturumu kapatıp aynı yerde hemen yenisini açar.
+    ///
+    /// Takibi büsbütün durdurmuyoruz: otomatik bir takipçinin izlemeyi
+    /// bırakması tuhaf olurdu. Amaç yanlış başlamış bir sayacı düzeltmek.
+    private mutating func handleEndSessionRequested(at now: Date) -> [SessionEffect] {
+        guard currentSession != nil else { return [] }
+        var effects = endSession(at: now)
+        effects.append(startSession(at: now))
+        return effects
     }
 
     private mutating func handleSleep(at now: Date) -> [SessionEffect] {
@@ -153,11 +189,19 @@ public struct SessionEngine: Sendable {
         // Saat sınırları duvar saatine bakar; uykudan sonra biriken sınırlar
         // ilk tick'te toplu olarak yakalanır.
         var effects: [SessionEffect] = []
-        let completedHours = Int(session.elapsed(at: now) / 3600)
-        if completedHours >= 1 {
-            for hour in 1...completedHours where !session.notifiedHourMarks.contains(hour) {
-                session.notifiedHourMarks.insert(hour)
-                effects.append(.hourMarkReached(hours: hour, placeID: session.placeID))
+        if let interval = configuration.notificationInterval, interval > 0 {
+            let reached = Int(session.elapsed(at: now) / interval)
+            if reached >= 1 {
+                for mark in 1...reached where !session.notifiedMarks.contains(mark) {
+                    session.notifiedMarks.insert(mark)
+                    effects.append(
+                        .markReached(
+                            index: mark,
+                            elapsed: TimeInterval(mark) * interval,
+                            placeID: session.placeID
+                        )
+                    )
+                }
             }
         }
 

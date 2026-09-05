@@ -12,11 +12,12 @@
 
 ## Global Constraints
 
-- **Minimum macOS 26.** `Package.swift` → `platforms: [.macOS(.v26)]`. Liquid Glass API'leri (`glassEffect`, `GlassEffectContainer`, `.buttonStyle(.glass)`, `.glassProminent`) bu sürümde geldi.
+- **Minimum macOS 26.** `Package.swift` → `platforms: [.macOS(.v26)]` **ve** `// swift-tools-version: 6.2`. `.v26` sabiti `@available(_PackageDescription 6.2)` ile kilitli; tools-version 6.0'da `'v26' is unavailable` hatası verir. Liquid Glass API'leri (`glassEffect`, `GlassEffectContainer`, `.buttonStyle(.glass)`, `.glassProminent`) bu sürümde geldi.
 - **Tüm `swift` komutları** `DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer` öneki ile çalıştırılır. Makinede `xcode-select` hâlâ Command Line Tools'u gösteriyor; `sudo` gerekmez.
 - **`PlaceTimerCore` hiçbir sistem çerçevesi import etmez.** Yalnızca `Foundation`. AppKit, SwiftUI, CoreLocation, CoreWLAN, MapKit yasak — bu hedefin testlenebilirliğinin tek güvencesi budur.
 - **Derleme uyarısız olmalı:** `swift build -Xswiftc -warnings-as-errors` temiz geçmeli. Swift 6 strict concurrency açık.
 - **Kullanıcıya görünen tüm metinler Türkçe.** Kod yorumları da Türkçe ve mevcut üslupla aynı: *ne* yaptığını değil *neden* öyle olduğunu anlatır.
+- **`#expect` içinde `Optional<Double>` karşılaştırırken sağ tarafı ondalık yaz.** `#expect(opt == 2 * 3600)` derlenir ama sessizce `false` döner: makro tamsayı çarpımını `Int` olarak bağlıyor. `2.0 * 3600`, `7200` ve `Double(2 * 3600)` doğru çalışır. Testi yanlış geçirmez, yanlış düşürür — ama sebebi görünmez.
 - **Testler Swift Testing ile** (`import Testing`, `@Suite`, `@Test`, `#expect`). Suite ve test adları Türkçe cümlelerdir.
 - **Commit mesajları ASCII** (mevcut depo düzeni), Türkçe metin, sonunda:
   ```
@@ -87,9 +88,12 @@ Mevcut testler: `Tests/PlaceTimerCoreTests/SessionEngineTests.swift`, `PlaceCata
 
 - [ ] **Step 1: Dağıtım hedefini yükselt**
 
-`Package.swift` içinde tek satır:
+`Package.swift` içinde iki satır — ilk satırdaki tools-version da yükselmeli,
+`.v26` sabiti `@available(_PackageDescription 6.2)` ile kilitli:
 
 ```swift
+// swift-tools-version: 6.2
+...
 platforms: [.macOS(.v26)],
 ```
 
@@ -1154,8 +1158,8 @@ struct PlaceTotalsTests {
         )
 
         #expect(toplamlar.count == 2)
-        #expect(toplamlar.first { $0.placeID == ev }?.totalSeconds == 2 * 3600)
-        #expect(toplamlar.first { $0.placeID == kafe }?.totalSeconds == 2 * 3600)
+        #expect(toplamlar.first { $0.placeID == ev }?.totalSeconds == 2.0 * 3600)
+        #expect(toplamlar.first { $0.placeID == kafe }?.totalSeconds == 2.0 * 3600)
     }
 
     @Test("Hafta takvim haftasıdır, kayan 7 gün değil")
@@ -1165,7 +1169,7 @@ struct PlaceTotalsTests {
         )
 
         // Pazartesi 7 + Carsamba 9 = 6 saat ev; 2 eylul haftaya girmez.
-        #expect(toplamlar.first { $0.placeID == ev }?.totalSeconds == 6 * 3600)
+        #expect(toplamlar.first { $0.placeID == ev }?.totalSeconds == 6.0 * 3600)
         #expect(toplamlar.first { $0.placeID == ev }?.sessionCount == 2)
     }
 
@@ -1175,9 +1179,9 @@ struct PlaceTotalsTests {
             from: oturumlar, range: .month, now: simdi, calendar: takvim
         )
 
-        #expect(toplamlar.first { $0.placeID == ev }?.totalSeconds == 9 * 3600)
+        #expect(toplamlar.first { $0.placeID == ev }?.totalSeconds == 9.0 * 3600)
         // 28 agustos eylul ayina girmez.
-        #expect(toplamlar.first { $0.placeID == kafe }?.totalSeconds == 2 * 3600)
+        #expect(toplamlar.first { $0.placeID == kafe }?.totalSeconds == 2.0 * 3600)
     }
 
     @Test("Toplam süreye göre azalan sıralanır")
@@ -1731,8 +1735,11 @@ func iconImage(size: CGFloat) -> NSImage {
     NSGradient(starting: arkaUst, ending: arkaAlt)?
         .draw(in: rect, angle: -90)
 
-    // Igne: merkez daire + asagi bakan ucgen uc. Ikisi ayni beyazla dolduruldugu
-    // icin tek bir siluet gibi okunur.
+    // Igne: merkez daire + asagi bakan ucgen uc.
+    //
+    // DIKKAT: ikisi ayri ayri doldurulmali. Tek bir NSBezierPath'e alt yol
+    // olarak eklendiklerinde ters yonde ciziliyorlar ve nonzero kurali
+    // kesisimi bosaltip dairenin altinda koyu bir bant birakiyor.
     let merkez = NSPoint(x: size / 2, y: size * 0.58)
     let yaricap = size * 0.23
 

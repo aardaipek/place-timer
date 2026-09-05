@@ -45,9 +45,9 @@ public struct Session: Codable, Sendable, Identifiable, Equatable {
     public var endedAt: Date?
     /// Klavye/fare etkinliği olan saniyelerin toplamı.
     public var activeSeconds: TimeInterval
-    /// Bildirimi gönderilmiş saat sınırları (1, 2, 3 …). Yeniden başlatmada
+    /// Bildirimi gönderilmiş aralık işaretleri (1, 2, 3 …). Yeniden başlatmada
     /// aynı bildirimin tekrar gitmemesi için diske yazılır.
-    public var notifiedHourMarks: Set<Int>
+    public var notifiedMarks: Set<Int>
 
     public init(
         id: UUID = UUID(),
@@ -55,14 +55,44 @@ public struct Session: Codable, Sendable, Identifiable, Equatable {
         startedAt: Date,
         endedAt: Date? = nil,
         activeSeconds: TimeInterval = 0,
-        notifiedHourMarks: Set<Int> = []
+        notifiedMarks: Set<Int> = []
     ) {
         self.id = id
         self.placeID = placeID
         self.startedAt = startedAt
         self.endedAt = endedAt
         self.activeSeconds = activeSeconds
-        self.notifiedHourMarks = notifiedHourMarks
+        self.notifiedMarks = notifiedMarks
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, placeID, startedAt, endedAt, activeSeconds, notifiedMarks
+    }
+
+    /// v1 bu alanı `notifiedHourMarks` diye yazıyordu. Ayrı bir anahtar
+    /// kümesinden okuyoruz ki `encode` sentezlenmeye devam etsin.
+    private enum LegacyKeys: String, CodingKey {
+        case notifiedHourMarks
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let legacy = try decoder.container(keyedBy: LegacyKeys.self)
+
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            placeID: try container.decodeIfPresent(UUID.self, forKey: .placeID),
+            startedAt: try container.decode(Date.self, forKey: .startedAt),
+            endedAt: try container.decodeIfPresent(Date.self, forKey: .endedAt),
+            activeSeconds: try container.decodeIfPresent(
+                TimeInterval.self, forKey: .activeSeconds
+            ) ?? 0,
+            notifiedMarks: try container.decodeIfPresent(
+                Set<Int>.self, forKey: .notifiedMarks
+            ) ?? legacy.decodeIfPresent(
+                Set<Int>.self, forKey: .notifiedHourMarks
+            ) ?? []
+        )
     }
 
     /// Yerde geçen süre: duvar saati, 60 dk altındaki uyku aralarını içerir.
@@ -87,13 +117,17 @@ public enum SessionEvent: Sendable, Equatable {
     case placeResolved(PlaceRef)
     /// Saniyede bir; `idleSeconds` son kullanıcı girdisinden bu yana geçen süre.
     case tick(idleSeconds: TimeInterval)
+    /// Kullanıcı sayacı elle sıfırladı: oturum kapanır, aynı yerde yenisi açılır.
+    case endSessionRequested
 }
 
 /// Motorun dışarıya bildirdiği yan etkiler. Motor bunları kendisi uygulamaz.
 public enum SessionEffect: Sendable, Equatable {
     case sessionStarted(Session)
     case sessionEnded(Session)
-    case hourMarkReached(hours: Int, placeID: UUID?)
+    /// `index` kaçıncı aralık, `elapsed` o anda yerde geçen toplam süre.
+    /// Bildirim metni süreyi yazacağı için ham indeksi tek başına taşımak yetmez.
+    case markReached(index: Int, elapsed: TimeInterval, placeID: UUID?)
 }
 
 public struct EngineConfiguration: Sendable, Equatable {
@@ -104,14 +138,27 @@ public struct EngineConfiguration: Sendable, Equatable {
     /// İki tick arasında sayaca eklenebilecek azami süre; kaçan tick'lerin
     /// aktif süreyi şişirmesini engeller.
     public var maxTickDelta: TimeInterval
+    /// Bildirim aralığı saniye cinsinden; `nil` ise bildirim üretilmez.
+    public var notificationInterval: TimeInterval?
 
     public init(
         sessionResetSleepThreshold: TimeInterval = 60 * 60,
         idleThreshold: TimeInterval = 5 * 60,
-        maxTickDelta: TimeInterval = 5
+        maxTickDelta: TimeInterval = 5,
+        notificationInterval: TimeInterval? = 60 * 60
     ) {
         self.sessionResetSleepThreshold = sessionResetSleepThreshold
         self.idleThreshold = idleThreshold
         self.maxTickDelta = maxTickDelta
+        self.notificationInterval = notificationInterval
+    }
+
+    /// Kullanıcı ayarlarından türetir.
+    public init(preferences: Preferences) {
+        self.init(
+            sessionResetSleepThreshold: preferences.sessionResetSleepThreshold,
+            idleThreshold: preferences.idleThreshold,
+            notificationInterval: preferences.notificationInterval.seconds
+        )
     }
 }

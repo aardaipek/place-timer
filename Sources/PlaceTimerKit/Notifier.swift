@@ -17,17 +17,15 @@ public final class Notifier {
         await center.notificationSettings().authorizationStatus
     }
 
-    public func notifyHourMark(hours: Int, placeName: String) {
+    public func notifyMark(elapsed: TimeInterval, placeName: String) {
         let content = UNMutableNotificationContent()
         content.title = placeName
-        content.body = hours == 1
-            ? "1 saat oldu."
-            : "\(hours) saat oldu."
+        content.body = "\(DurationFormat.readable(elapsed)) oldu."
         content.sound = .default
 
         center.add(
             UNNotificationRequest(
-                identifier: "hour-mark-\(hours)-\(UUID().uuidString)",
+                identifier: "mark-\(UUID().uuidString)",
                 content: content,
                 trigger: nil
             )

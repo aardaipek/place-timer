@@ -9,6 +9,8 @@ gosterir. Her saat basi bildirim gonderir.
 Petra Roas… · 2:14
 ```
 
+Gereksinim: **macOS 26+** (Liquid Glass arayuz).
+
 ## Nasil calisir
 
 - **Yer kimligi** bagli olunan SSID kumesidir. Router'lar 2.4 ve 5 GHz
@@ -18,9 +20,27 @@ Petra Roas… · 2:14
   molalar (kahve almak, tuvalet) oturumu bozmaz.
 - **Iki sayac** paralel isler: menubar'daki *yerde gecen sure* duvar saatidir;
   panel ayrica *aktif calisma suresini* gosterir (ekran acik ve son girdiden
-  bu yana 5 dakikadan az gecmisse sayar).
+  bu yana esik suresinden az gecmisse sayar).
+- **Gun seridi** gunun ilk oturumundan simdiye uzanir, yerlere gore renklidir.
+  Oturumlar arasi bosluklar bos gorunur.
+- **Manuel kontrol**: otomasyon yanilirsa panelden sayaci sifirlayabilir ya da
+  yeri elle degistirebilirsin. Manuel secim, o anki agda kalindigi surece
+  otomatik eslesmeyi bastirir.
 
-Tasarimin tamami: [`docs/superpowers/specs/2026-09-04-place-timer-design.md`](docs/superpowers/specs/2026-09-04-place-timer-design.md)
+## Ayarlar
+
+Menubar panelindeki disli dugmesi dort sekmeli ayarlar penceresini acar:
+
+| Sekme | Icerik |
+|---|---|
+| Genel | Saniye gosterimi, menubar'da yer adi, esikler, bildirim sikligi, acilista baslat |
+| Yerler | Kayitli yerler: ad degistir, SSID ayir, sil |
+| Izinler | Konum / bildirim / giris ogesi durumu ve duzeltme |
+| Istatistik | Bu hafta / bu ay, yer basina toplam |
+
+Tasarim dokumanlari:
+[v1](docs/superpowers/specs/2026-09-04-place-timer-design.md) ·
+[v2](docs/superpowers/specs/2026-09-05-place-timer-v2-design.md)
 
 ## Izinler
 
@@ -38,9 +58,13 @@ tutulur.
 ## Kurulum
 
 ```bash
+Scripts/make-icon.sh               # simgeyi uretir (bir kez yeterli)
 Scripts/build-app.sh --install     # derler, imzalar, /Applications'a kurar
 open /Applications/PlaceTimer.app
 ```
+
+Imza kimligi `.codesign-identity` dosyasinda sabittir. macOS izinleri paket
+kimligi + imza ciftine bagladigi icin kimlik degisirse tum izinler sifirlanir.
 
 Sifirdan baslamak icin (mevcut veri yanina `.bak` olarak tasinir, silinmez):
 
@@ -66,7 +90,7 @@ Kod uc katmana ayrilmistir:
 
 | Hedef | Icerik | Bagimlilik |
 |---|---|---|
-| `PlaceTimerCore` | Oturum durum makinesi, yer eslesme, JSON depolama | Yok (saf Foundation) |
+| `PlaceTimerCore` | Oturum durum makinesi, yer eslesme, tercihler, istatistik, JSON depolama | Yok (saf Foundation) |
 | `PlaceTimerKit` | Wi-Fi, konum, uyku, hareketsizlik, bildirim, arayuz | AppKit, CoreLocation, CoreWLAN |
 | `PlaceTimerApp` | Yalnizca giris noktasi | PlaceTimerKit |
 

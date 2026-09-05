@@ -203,13 +203,13 @@ struct SessionEngineTests {
         #expect(engine.handle(.tick(idleSeconds: 0), at: at(59)).isEmpty)
 
         let firstHour = engine.handle(.tick(idleSeconds: 0), at: at(60))
-        #expect(firstHour == [.hourMarkReached(hours: 1, placeID: kafe)])
+        #expect(firstHour == [.markReached(index: 1, elapsed: 3600, placeID: kafe)])
 
         #expect(engine.handle(.tick(idleSeconds: 0), at: at(61)).isEmpty)
         #expect(engine.handle(.tick(idleSeconds: 0), at: at(119)).isEmpty)
 
         let secondHour = engine.handle(.tick(idleSeconds: 0), at: at(120))
-        #expect(secondHour == [.hourMarkReached(hours: 2, placeID: kafe)])
+        #expect(secondHour == [.markReached(index: 2, elapsed: 7200, placeID: kafe)])
     }
 
     @Test("Uyku boyunca biriken saat sınırları uyanışta toplu düşer")
@@ -223,7 +223,7 @@ struct SessionEngineTests {
         engine.handle(.placeResolved(.known(kafe)), at: at(55))
 
         let effects = engine.handle(.tick(idleSeconds: 0), at: at(70))
-        #expect(effects == [.hourMarkReached(hours: 1, placeID: kafe)])
+        #expect(effects == [.markReached(index: 1, elapsed: 3600, placeID: kafe)])
     }
 
     @Test("Yeni oturum saat sınırlarını sıfırdan sayar")
@@ -237,7 +237,7 @@ struct SessionEngineTests {
         #expect(engine.handle(.tick(idleSeconds: 0), at: at(140)).isEmpty)
 
         let effects = engine.handle(.tick(idleSeconds: 0), at: at(150))
-        #expect(effects == [.hourMarkReached(hours: 1, placeID: kafe)])
+        #expect(effects == [.markReached(index: 1, elapsed: 3600, placeID: kafe)])
     }
 
     @Test("Diskten geri yüklenen oturum kaldığı yerden devam eder")
@@ -246,7 +246,7 @@ struct SessionEngineTests {
             placeID: kafe,
             startedAt: at(0),
             activeSeconds: 1200,
-            notifiedHourMarks: [1]
+            notifiedMarks: [1]
         )
         var engine = SessionEngine(restoring: saved)
 
@@ -255,7 +255,7 @@ struct SessionEngineTests {
 
         // 1. saat bildirimi tekrar gönderilmez, 2. saat gönderilir.
         let effects = engine.handle(.tick(idleSeconds: 0), at: at(125))
-        #expect(effects == [.hourMarkReached(hours: 2, placeID: kafe)])
+        #expect(effects == [.markReached(index: 2, elapsed: 7200, placeID: kafe)])
     }
 
     @Test("Uykudayken gelen tick'ler yok sayılır")
@@ -269,5 +269,165 @@ struct SessionEngineTests {
         advance(&engine, from: at(1), seconds: 60)
 
         #expect(engine.activeSeconds == before)
+    }
+}
+
+@Suite("Bildirim aralığı")
+struct NotificationIntervalTests {
+
+    private func engine(interval: TimeInterval?) -> SessionEngine {
+        SessionEngine(
+            configuration: EngineConfiguration(notificationInterval: interval)
+        )
+    }
+
+    @Test("Kapalıyken hiç işaret üretilmez")
+    func offProducesNothing() {
+        var motor = engine(interval: nil)
+        motor.handle(.wake, at: at(0))
+        motor.handle(.placeResolved(.known(kafe)), at: at(0))
+
+        #expect(motor.handle(.tick(idleSeconds: 0), at: at(60)).isEmpty)
+        #expect(motor.handle(.tick(idleSeconds: 0), at: at(180)).isEmpty)
+        #expect(motor.currentSession?.notifiedMarks.isEmpty == true)
+    }
+
+    @Test("30 dakikalık aralık her yarım saatte bir düşer")
+    func halfHourlyMarks() {
+        var motor = engine(interval: 30 * 60)
+        motor.handle(.wake, at: at(0))
+        motor.handle(.placeResolved(.known(kafe)), at: at(0))
+
+        #expect(motor.handle(.tick(idleSeconds: 0), at: at(29)).isEmpty)
+
+        let ilk = motor.handle(.tick(idleSeconds: 0), at: at(30))
+        #expect(ilk == [.markReached(index: 1, elapsed: 30 * 60, placeID: kafe)])
+
+        #expect(motor.handle(.tick(idleSeconds: 0), at: at(45)).isEmpty)
+
+        let ikinci = motor.handle(.tick(idleSeconds: 0), at: at(60))
+        #expect(ikinci == [.markReached(index: 2, elapsed: 60 * 60, placeID: kafe)])
+    }
+
+    @Test("İşaretin bildirdiği süre gerçek geçen süredir")
+    func markCarriesElapsed() {
+        var motor = engine(interval: 30 * 60)
+        motor.handle(.wake, at: at(0))
+        motor.handle(.placeResolved(.known(kafe)), at: at(0))
+
+        // 95. dakikada ilk kez tick geliyor: 3 isaret birikmis.
+        let etkiler = motor.handle(.tick(idleSeconds: 0), at: at(95))
+
+        #expect(etkiler.count == 3)
+        #expect(etkiler[0] == .markReached(index: 1, elapsed: 30 * 60, placeID: kafe))
+        #expect(etkiler[2] == .markReached(index: 3, elapsed: 90 * 60, placeID: kafe))
+    }
+}
+
+@Suite("Yapılandırma değişimi")
+struct ConfigurationUpdateTests {
+
+    @Test("Açık oturum ve sayaçlar korunur")
+    func openSessionSurvives() {
+        var motor = SessionEngine()
+        motor.handle(.wake, at: at(0))
+        motor.handle(.placeResolved(.known(kafe)), at: at(0))
+        advance(&motor, from: at(0), seconds: 30)
+
+        let oturum = motor.currentSession?.id
+        let aktif = motor.activeSeconds
+
+        motor.updateConfiguration(
+            EngineConfiguration(idleThreshold: 120), at: at(1)
+        )
+
+        #expect(motor.currentSession?.id == oturum)
+        #expect(motor.activeSeconds == aktif)
+        #expect(motor.configuration.idleThreshold == 120)
+    }
+
+    @Test("Aralık kısalınca birikmiş bildirimler topluca düşmez")
+    func shorteningIntervalDoesNotBurst() {
+        var motor = SessionEngine(
+            configuration: EngineConfiguration(notificationInterval: 3600)
+        )
+        motor.handle(.wake, at: at(0))
+        motor.handle(.placeResolved(.known(kafe)), at: at(0))
+        motor.handle(.tick(idleSeconds: 0), at: at(90))   // 1. saat isareti dustu
+
+        // Kullanici 30 dakikaliga geciyor. 90 dakikada 3 isaret var ama
+        // gecmise donuk 3 bildirim atmak sacma olurdu.
+        motor.updateConfiguration(
+            EngineConfiguration(notificationInterval: 1800), at: at(90)
+        )
+
+        #expect(motor.currentSession?.notifiedMarks == [1, 2, 3])
+        #expect(motor.handle(.tick(idleSeconds: 0), at: at(100)).isEmpty)
+
+        // Bir sonraki gercek isaret 120. dakikada.
+        let sonraki = motor.handle(.tick(idleSeconds: 0), at: at(120))
+        #expect(sonraki == [.markReached(index: 4, elapsed: 4 * 1800, placeID: kafe)])
+    }
+
+    @Test("Bildirim kapatılınca işaret üretimi durur")
+    func turningOffStopsMarks() {
+        var motor = SessionEngine(
+            configuration: EngineConfiguration(notificationInterval: 3600)
+        )
+        motor.handle(.wake, at: at(0))
+        motor.updateConfiguration(
+            EngineConfiguration(notificationInterval: nil), at: at(10)
+        )
+
+        #expect(motor.handle(.tick(idleSeconds: 0), at: at(120)).isEmpty)
+    }
+}
+
+@Suite("Manuel oturum bitirme")
+struct EndSessionTests {
+
+    @Test("Oturum kapanır ve aynı yerde yenisi açılır")
+    func endStartsFreshSessionSamePlace() {
+        var motor = SessionEngine()
+        motor.handle(.wake, at: at(0))
+        motor.handle(.placeResolved(.known(kafe)), at: at(0))
+        let eski = motor.currentSession?.id
+
+        let etkiler = motor.handle(.endSessionRequested, at: at(45))
+
+        #expect(etkiler.count == 2)
+        guard case .sessionEnded(let kapanan) = etkiler[0] else {
+            Issue.record("once kapanis beklenir"); return
+        }
+        #expect(kapanan.id == eski)
+        #expect(kapanan.endedAt == at(45))
+
+        guard case .sessionStarted(let yeni) = etkiler[1] else {
+            Issue.record("sonra yeni oturum beklenir"); return
+        }
+        #expect(yeni.startedAt == at(45))
+        #expect(yeni.placeID == kafe)
+        #expect(motor.elapsed(at: at(45)) == 0)
+    }
+
+    @Test("Yeni oturum bildirim işaretlerini sıfırdan sayar")
+    func marksResetAfterManualEnd() {
+        var motor = SessionEngine()
+        motor.handle(.wake, at: at(0))
+        motor.handle(.placeResolved(.known(kafe)), at: at(0))
+        motor.handle(.tick(idleSeconds: 0), at: at(70))   // 1. saat dustu
+
+        motor.handle(.endSessionRequested, at: at(70))
+
+        #expect(motor.handle(.tick(idleSeconds: 0), at: at(120)).isEmpty)
+        let etkiler = motor.handle(.tick(idleSeconds: 0), at: at(131))
+        #expect(etkiler == [.markReached(index: 1, elapsed: 3600, placeID: kafe)])
+    }
+
+    @Test("Açık oturum yokken bir şey olmaz")
+    func endWithoutSessionIsHarmless() {
+        var motor = SessionEngine()
+        #expect(motor.handle(.endSessionRequested, at: at(0)).isEmpty)
+        #expect(motor.currentSession == nil)
     }
 }
