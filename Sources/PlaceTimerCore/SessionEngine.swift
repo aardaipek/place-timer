@@ -85,6 +85,8 @@ public struct SessionEngine: Sendable {
             return handlePlaceResolved(place, at: now)
         case .tick(let idleSeconds):
             return handleTick(idleSeconds: idleSeconds, at: now)
+        case .endSessionRequested:
+            return handleEndSessionRequested(at: now)
         }
     }
 
@@ -109,6 +111,17 @@ public struct SessionEngine: Sendable {
         // Kısa mola: oturum sürüyor, ama yerin değişmediğini henüz bilmiyoruz.
         pendingSleepStart = sleptAt
         return currentSession == nil ? [startSession(at: now)] : []
+    }
+
+    /// Oturumu kapatıp aynı yerde hemen yenisini açar.
+    ///
+    /// Takibi büsbütün durdurmuyoruz: otomatik bir takipçinin izlemeyi
+    /// bırakması tuhaf olurdu. Amaç yanlış başlamış bir sayacı düzeltmek.
+    private mutating func handleEndSessionRequested(at now: Date) -> [SessionEffect] {
+        guard currentSession != nil else { return [] }
+        var effects = endSession(at: now)
+        effects.append(startSession(at: now))
+        return effects
     }
 
     private mutating func handleSleep(at now: Date) -> [SessionEffect] {

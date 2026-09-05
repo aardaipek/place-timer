@@ -117,6 +117,8 @@ public enum SessionEvent: Sendable, Equatable {
     case placeResolved(PlaceRef)
     /// Saniyede bir; `idleSeconds` son kullanıcı girdisinden bu yana geçen süre.
     case tick(idleSeconds: TimeInterval)
+    /// Kullanıcı sayacı elle sıfırladı: oturum kapanır, aynı yerde yenisi açılır.
+    case endSessionRequested
 }
 
 /// Motorun dışarıya bildirdiği yan etkiler. Motor bunları kendisi uygulamaz.

@@ -382,3 +382,52 @@ struct ConfigurationUpdateTests {
         #expect(motor.handle(.tick(idleSeconds: 0), at: at(120)).isEmpty)
     }
 }
+
+@Suite("Manuel oturum bitirme")
+struct EndSessionTests {
+
+    @Test("Oturum kapanır ve aynı yerde yenisi açılır")
+    func endStartsFreshSessionSamePlace() {
+        var motor = SessionEngine()
+        motor.handle(.wake, at: at(0))
+        motor.handle(.placeResolved(.known(kafe)), at: at(0))
+        let eski = motor.currentSession?.id
+
+        let etkiler = motor.handle(.endSessionRequested, at: at(45))
+
+        #expect(etkiler.count == 2)
+        guard case .sessionEnded(let kapanan) = etkiler[0] else {
+            Issue.record("once kapanis beklenir"); return
+        }
+        #expect(kapanan.id == eski)
+        #expect(kapanan.endedAt == at(45))
+
+        guard case .sessionStarted(let yeni) = etkiler[1] else {
+            Issue.record("sonra yeni oturum beklenir"); return
+        }
+        #expect(yeni.startedAt == at(45))
+        #expect(yeni.placeID == kafe)
+        #expect(motor.elapsed(at: at(45)) == 0)
+    }
+
+    @Test("Yeni oturum bildirim işaretlerini sıfırdan sayar")
+    func marksResetAfterManualEnd() {
+        var motor = SessionEngine()
+        motor.handle(.wake, at: at(0))
+        motor.handle(.placeResolved(.known(kafe)), at: at(0))
+        motor.handle(.tick(idleSeconds: 0), at: at(70))   // 1. saat dustu
+
+        motor.handle(.endSessionRequested, at: at(70))
+
+        #expect(motor.handle(.tick(idleSeconds: 0), at: at(120)).isEmpty)
+        let etkiler = motor.handle(.tick(idleSeconds: 0), at: at(131))
+        #expect(etkiler == [.markReached(index: 1, elapsed: 3600, placeID: kafe)])
+    }
+
+    @Test("Açık oturum yokken bir şey olmaz")
+    func endWithoutSessionIsHarmless() {
+        var motor = SessionEngine()
+        #expect(motor.handle(.endSessionRequested, at: at(0)).isEmpty)
+        #expect(motor.currentSession == nil)
+    }
+}
