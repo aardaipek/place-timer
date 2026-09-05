@@ -39,6 +39,6 @@ public struct SettingsView: View {
             StatisticsSettingsView(coordinator: coordinator)
                 .tabItem { Label("İstatistik", systemImage: "chart.bar") }
         }
-        .frame(width: 520, height: 420)
+        .frame(width: 540, height: 500)
     }
 }

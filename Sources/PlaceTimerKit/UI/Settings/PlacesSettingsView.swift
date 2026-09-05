@@ -18,11 +18,14 @@ struct PlacesSettingsView: View {
                 }
                 .tag(place.id)
             }
-            .frame(minWidth: 180)
+            .frame(minWidth: 180, maxHeight: .infinity)
 
             detay
-                .frame(minWidth: 260)
+                .frame(minWidth: 260, maxWidth: .infinity, maxHeight: .infinity)
         }
+        // TabView icinde HSplitView kendi ideal yuksekligine buzusup pencerenin
+        // altina yapisiyor; dikeyde acikca genislemesini soylemek gerekiyor.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .confirmationDialog(
             "\(silinecek?.displayName ?? "") silinsin mi?",
             isPresented: Binding(
