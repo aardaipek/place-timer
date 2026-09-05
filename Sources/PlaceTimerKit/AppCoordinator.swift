@@ -29,7 +29,6 @@ public final class AppCoordinator {
     public private(set) var placeName: String = "Bilinmeyen yer"
     public private(set) var elapsed: TimeInterval = 0
     public private(set) var activeSeconds: TimeInterval = 0
-    public private(set) var todaySessions: [Session] = []
     public private(set) var prompt: PlacePrompt? {
         didSet {
             guard prompt != oldValue else { return }
@@ -380,14 +379,6 @@ public final class AppCoordinator {
         elapsed = engine.elapsed(at: now)
         activeSeconds = engine.activeSeconds
         placeName = placeName(for: engine.currentSession?.placeID)
-
-        let calendar = Calendar.current
-        var todays = history.filter { calendar.isDate($0.startedAt, inSameDayAs: now) }
-        if let current = engine.currentSession,
-           calendar.isDate(current.startedAt, inSameDayAs: now) {
-            todays.append(current)
-        }
-        todaySessions = todays.sorted { $0.startedAt < $1.startedAt }
 
         todaySegments = daySegments(from: allSessions, on: now)
         todayHereSeconds = placeTotals(from: allSessions, range: .today, now: now)
