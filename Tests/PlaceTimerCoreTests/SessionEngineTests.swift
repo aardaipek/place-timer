@@ -323,3 +323,62 @@ struct NotificationIntervalTests {
         #expect(etkiler[2] == .markReached(index: 3, elapsed: 90 * 60, placeID: kafe))
     }
 }
+
+@Suite("Yapılandırma değişimi")
+struct ConfigurationUpdateTests {
+
+    @Test("Açık oturum ve sayaçlar korunur")
+    func openSessionSurvives() {
+        var motor = SessionEngine()
+        motor.handle(.wake, at: at(0))
+        motor.handle(.placeResolved(.known(kafe)), at: at(0))
+        advance(&motor, from: at(0), seconds: 30)
+
+        let oturum = motor.currentSession?.id
+        let aktif = motor.activeSeconds
+
+        motor.updateConfiguration(
+            EngineConfiguration(idleThreshold: 120), at: at(1)
+        )
+
+        #expect(motor.currentSession?.id == oturum)
+        #expect(motor.activeSeconds == aktif)
+        #expect(motor.configuration.idleThreshold == 120)
+    }
+
+    @Test("Aralık kısalınca birikmiş bildirimler topluca düşmez")
+    func shorteningIntervalDoesNotBurst() {
+        var motor = SessionEngine(
+            configuration: EngineConfiguration(notificationInterval: 3600)
+        )
+        motor.handle(.wake, at: at(0))
+        motor.handle(.placeResolved(.known(kafe)), at: at(0))
+        motor.handle(.tick(idleSeconds: 0), at: at(90))   // 1. saat isareti dustu
+
+        // Kullanici 30 dakikaliga geciyor. 90 dakikada 3 isaret var ama
+        // gecmise donuk 3 bildirim atmak sacma olurdu.
+        motor.updateConfiguration(
+            EngineConfiguration(notificationInterval: 1800), at: at(90)
+        )
+
+        #expect(motor.currentSession?.notifiedMarks == [1, 2, 3])
+        #expect(motor.handle(.tick(idleSeconds: 0), at: at(100)).isEmpty)
+
+        // Bir sonraki gercek isaret 120. dakikada.
+        let sonraki = motor.handle(.tick(idleSeconds: 0), at: at(120))
+        #expect(sonraki == [.markReached(index: 4, elapsed: 4 * 1800, placeID: kafe)])
+    }
+
+    @Test("Bildirim kapatılınca işaret üretimi durur")
+    func turningOffStopsMarks() {
+        var motor = SessionEngine(
+            configuration: EngineConfiguration(notificationInterval: 3600)
+        )
+        motor.handle(.wake, at: at(0))
+        motor.updateConfiguration(
+            EngineConfiguration(notificationInterval: nil), at: at(10)
+        )
+
+        #expect(motor.handle(.tick(idleSeconds: 0), at: at(120)).isEmpty)
+    }
+}

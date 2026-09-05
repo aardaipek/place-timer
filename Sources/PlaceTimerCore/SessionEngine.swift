@@ -12,7 +12,7 @@ public struct SessionEngine: Sendable {
     public private(set) var isAsleep: Bool
     public private(set) var isScreenLocked: Bool
 
-    public let configuration: EngineConfiguration
+    public private(set) var configuration: EngineConfiguration
 
     private var sleepStartedAt: Date?
     /// Uyandıktan sonraki ilk yer çözümlemesine kadar taşınır. Yer uyku
@@ -41,6 +41,29 @@ public struct SessionEngine: Sendable {
 
     public var activeSeconds: TimeInterval {
         currentSession?.activeSeconds ?? 0
+    }
+
+    /// Ayarlar değişince yapılandırmayı, açık oturumu bozmadan günceller.
+    ///
+    /// Bildirim aralığı değişirse geçmiş işaretler dolu sayılır. Aksi halde
+    /// saatlikten 30 dakikalığa geçildiğinde o ana kadar birikmiş bütün
+    /// bildirimler topluca düşerdi.
+    public mutating func updateConfiguration(
+        _ configuration: EngineConfiguration,
+        at now: Date
+    ) {
+        let previousInterval = self.configuration.notificationInterval
+        self.configuration = configuration
+
+        guard
+            configuration.notificationInterval != previousInterval,
+            let interval = configuration.notificationInterval, interval > 0,
+            var session = currentSession
+        else { return }
+
+        let passed = Int(session.elapsed(at: now) / interval)
+        session.notifiedMarks = passed >= 1 ? Set(1...passed) : []
+        currentSession = session
     }
 
     @discardableResult
