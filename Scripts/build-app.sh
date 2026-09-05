@@ -81,6 +81,12 @@ cp "$(swift build -c "$CONFIGURATION" --show-bin-path)/PlaceTimerApp" \
    "$BUNDLE/Contents/MacOS/${APP_NAME}"
 cp Resources/Info.plist "$BUNDLE/Contents/Info.plist"
 
+if [[ -f Resources/AppIcon.icns ]]; then
+  cp Resources/AppIcon.icns "$BUNDLE/Contents/Resources/AppIcon.icns"
+else
+  echo "uyari: Resources/AppIcon.icns yok; once Scripts/make-icon.sh calistirin." >&2
+fi
+
 echo "==> Imzalaniyor: $IDENTITY"
 codesign --force --options runtime --timestamp=none \
   --sign "$IDENTITY" "$BUNDLE"

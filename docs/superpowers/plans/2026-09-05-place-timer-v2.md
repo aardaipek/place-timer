@@ -1735,8 +1735,11 @@ func iconImage(size: CGFloat) -> NSImage {
     NSGradient(starting: arkaUst, ending: arkaAlt)?
         .draw(in: rect, angle: -90)
 
-    // Igne: merkez daire + asagi bakan ucgen uc. Ikisi ayni beyazla dolduruldugu
-    // icin tek bir siluet gibi okunur.
+    // Igne: merkez daire + asagi bakan ucgen uc.
+    //
+    // DIKKAT: ikisi ayri ayri doldurulmali. Tek bir NSBezierPath'e alt yol
+    // olarak eklendiklerinde ters yonde ciziliyorlar ve nonzero kurali
+    // kesisimi bosaltip dairenin altinda koyu bir bant birakiyor.
     let merkez = NSPoint(x: size / 2, y: size * 0.58)
     let yaricap = size * 0.23
 
