@@ -198,9 +198,11 @@ public final class AppCoordinator {
             case .sessionEnded(let session):
                 history.append(session)
                 try? historyStore.save(history)
-            case .hourMarkReached(let hours, let placeID):
-                let name = placeID.flatMap { catalog.place(id: $0)?.displayName }
-                notifier.notifyHourMark(hours: hours, placeName: name ?? "Bilinmeyen yer")
+            case .markReached(_, let elapsed, let placeID):
+                notifier.notifyMark(
+                    elapsed: elapsed,
+                    placeName: placeName(for: placeID)
+                )
             }
         }
     }

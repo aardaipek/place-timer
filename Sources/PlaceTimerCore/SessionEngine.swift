@@ -153,11 +153,19 @@ public struct SessionEngine: Sendable {
         // Saat sınırları duvar saatine bakar; uykudan sonra biriken sınırlar
         // ilk tick'te toplu olarak yakalanır.
         var effects: [SessionEffect] = []
-        let completedHours = Int(session.elapsed(at: now) / 3600)
-        if completedHours >= 1 {
-            for hour in 1...completedHours where !session.notifiedHourMarks.contains(hour) {
-                session.notifiedHourMarks.insert(hour)
-                effects.append(.hourMarkReached(hours: hour, placeID: session.placeID))
+        if let interval = configuration.notificationInterval, interval > 0 {
+            let reached = Int(session.elapsed(at: now) / interval)
+            if reached >= 1 {
+                for mark in 1...reached where !session.notifiedMarks.contains(mark) {
+                    session.notifiedMarks.insert(mark)
+                    effects.append(
+                        .markReached(
+                            index: mark,
+                            elapsed: TimeInterval(mark) * interval,
+                            placeID: session.placeID
+                        )
+                    )
+                }
             }
         }
 
