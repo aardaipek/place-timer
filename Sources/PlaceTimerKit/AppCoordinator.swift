@@ -93,7 +93,15 @@ public final class AppCoordinator {
     public func start() async {
         catalog = (try? catalogStore.load()) ?? PlaceCatalog()
         history = (try? historyStore.load()) ?? []
-        preferences = (try? preferencesStore.load()) ?? Preferences()
+        if let saved = try? preferencesStore.load() {
+            preferences = saved
+        } else {
+            // Ilk acilista varsayilanlari diske yaz: dosya gorunur ve elle
+            // duzenlenebilir olsun, kullanici hangi ayarlarin var oldugunu
+            // acmadan da gorebilsin.
+            preferences = Preferences()
+            try? preferencesStore.save(preferences)
+        }
 
         location.onAuthorizationChange = { [weak self] _ in
             guard let self else { return }
