@@ -272,7 +272,7 @@ public final class AppCoordinator {
     }
 
     public func placeName(for placeID: UUID?) -> String {
-        placeID.flatMap { catalog.place(id: $0)?.displayName } ?? "Bilinmeyen yer"
+        catalog.displayName(for: placeID)
     }
 
     // MARK: - Diske yazma ve görüntü

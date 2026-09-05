@@ -118,6 +118,62 @@ struct PlaceCatalogTests {
         #expect(eslesen.bssids.contains("18:48:59:0b:d0:2a"))
     }
 
+    @Test("Silinen yer artık eşleşmez")
+    func removedPlaceStopsMatching() {
+        let ev = yer("Ev", ssids: ["TURKSAT-DDBB"])
+        var catalog = PlaceCatalog(places: [ev])
+
+        catalog.remove(ev.id)
+
+        #expect(catalog.places.isEmpty)
+        #expect(
+            catalog.resolve(ssid: "TURKSAT-DDBB", coordinate: evKoordinati)
+                == .unknownNetwork(nearby: [])
+        )
+    }
+
+    @Test("SSID ayrılınca o ağ eşleşmez ama yer durur")
+    func detachedSSIDStopsMatchingButPlaceRemains() {
+        let ev = yer("Ev", ssids: ["TURKSAT-DDBB", "TURKSAT-DDBB-5G"])
+        var catalog = PlaceCatalog(places: [ev])
+
+        catalog.detach(ssid: "TURKSAT-DDBB-5G", from: ev.id)
+
+        #expect(catalog.place(id: ev.id)?.ssids == ["TURKSAT-DDBB"])
+        guard case .matched = catalog.resolve(
+            ssid: "TURKSAT-DDBB", coordinate: evKoordinati
+        ) else {
+            Issue.record("kalan SSID hala eslesmeli"); return
+        }
+        guard case .unknownNetwork = catalog.resolve(
+            ssid: "TURKSAT-DDBB-5G", coordinate: evKoordinati
+        ) else {
+            Issue.record("ayrilan SSID eslesmemeli"); return
+        }
+    }
+
+    @Test("Son SSID'si ayrılan yer katalogda kalır")
+    func placeSurvivesLosingLastSSID() {
+        let ev = yer("Ev", ssids: ["TURKSAT-DDBB"])
+        var catalog = PlaceCatalog(places: [ev])
+
+        catalog.detach(ssid: "TURKSAT-DDBB", from: ev.id)
+
+        // Silme ile ayirma farkli islemler: yer duruyor, sadece agsiz kaldi.
+        #expect(catalog.place(id: ev.id)?.ssids.isEmpty == true)
+        #expect(catalog.places.count == 1)
+    }
+
+    @Test("Görünen ad üç durumu ayırır")
+    func displayNameDistinguishesThreeCases() {
+        let ev = yer("Ev", ssids: ["TURKSAT-DDBB"])
+        let catalog = PlaceCatalog(places: [ev])
+
+        #expect(catalog.displayName(for: ev.id) == "Ev")
+        #expect(catalog.displayName(for: nil) == "Bilinmeyen yer")
+        #expect(catalog.displayName(for: UUID()) == "Silinmiş yer")
+    }
+
     @Test("Yeniden adlandırma kalıcı")
     func renamePersists() {
         let yeni = yer("Bilinmeyen yer", ssids: ["Kafe-Misafir"])

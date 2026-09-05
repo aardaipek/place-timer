@@ -83,6 +83,26 @@ public struct PlaceCatalog: Codable, Sendable, Equatable {
         guard let index = places.firstIndex(where: { $0.id == placeID }) else { return }
         places[index].displayName = displayName
     }
+
+    public mutating func remove(_ placeID: UUID) {
+        places.removeAll { $0.id == placeID }
+    }
+
+    /// Bir ağı yerden ayırır. Yerin son SSID'si olsa bile yer silinmez —
+    /// silmek ile ayırmak farklı işlemlerdir; kullanıcı hangisini istediğini
+    /// kendisi söyler.
+    public mutating func detach(ssid: String, from placeID: UUID) {
+        guard let index = places.firstIndex(where: { $0.id == placeID }) else { return }
+        places[index].ssids.remove(ssid)
+    }
+
+    /// Bir oturumun yer adı. Üç durum ayrı ayrı adlandırılır: yer hiç
+    /// bilinmiyordu, yer sonradan silindi, ya da yer duruyor. Silinmiş bir yeri
+    /// sessizce "Bilinmeyen yer"e karıştırmak geçmişi yanlış anlatırdı.
+    public func displayName(for placeID: UUID?) -> String {
+        guard let placeID else { return "Bilinmeyen yer" }
+        return place(id: placeID)?.displayName ?? "Silinmiş yer"
+    }
 }
 
 extension Place {
