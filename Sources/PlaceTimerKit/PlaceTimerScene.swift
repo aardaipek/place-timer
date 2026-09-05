@@ -25,8 +25,12 @@ public struct PlaceTimerScene: Scene {
 
     private var menuBarTitle: String {
         guard !coordinator.needsLocationPermission else { return "◷ İzin gerekli" }
-        let name = DurationFormat.truncate(coordinator.placeName)
-        return "\(name) · \(DurationFormat.clock(coordinator.elapsed))"
+        let time = DurationFormat.clock(
+            coordinator.elapsed,
+            showSeconds: coordinator.preferences.showSeconds
+        )
+        guard coordinator.preferences.showPlaceNameInMenuBar else { return time }
+        return "\(DurationFormat.truncate(coordinator.placeName)) · \(time)"
     }
 }
 

@@ -1,10 +1,18 @@
 import Foundation
 
 public enum DurationFormat {
-    /// Menubar ve panel başlığı için: `2:14`, `0:07`.
-    public static func clock(_ seconds: TimeInterval) -> String {
+    /// Menubar ve panel başlığı için: `2:14` veya `2:14:07`.
+    public static func clock(
+        _ seconds: TimeInterval,
+        showSeconds: Bool = false
+    ) -> String {
         let total = Int(max(0, seconds))
-        return String(format: "%d:%02d", total / 3600, (total % 3600) / 60)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        guard showSeconds else {
+            return String(format: "%d:%02d", hours, minutes)
+        }
+        return String(format: "%d:%02d:%02d", hours, minutes, total % 60)
     }
 
     /// Okunur biçim: `1sa 47dk`, `47dk`, `3dk`.

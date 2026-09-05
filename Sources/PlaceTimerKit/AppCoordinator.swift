@@ -42,6 +42,9 @@ public final class AppCoordinator {
     public var onPromptChange: ((PlacePrompt?) -> Void)?
     public private(set) var needsLocationPermission: Bool = false
     public private(set) var needsNotificationPermission: Bool = false
+    public private(set) var preferences = Preferences()
+    public private(set) var todaySegments: [DaySegment] = []
+    public private(set) var todayHereSeconds: TimeInterval = 0
 
     public var currentPlaceID: UUID? { engine.currentSession?.placeID }
 
@@ -58,6 +61,7 @@ public final class AppCoordinator {
     private let catalogStore: JSONFileStore<PlaceCatalog>
     private let historyStore: JSONFileStore<[Session]>
     private let stateStore: JSONFileStore<AppState>
+    private let preferencesStore: JSONFileStore<Preferences>
 
     private var ticker: Timer?
     private var ticksSinceNetworkCheck = 0
@@ -65,6 +69,9 @@ public final class AppCoordinator {
     /// Kullanıcının "şimdilik atla" dediği ağlar; uygulama açık kaldığı
     /// sürece tekrar sorulmaz.
     private var skippedSSIDs: Set<String> = []
+    /// Kullanıcının "burası aslında şurası" düzeltmesi; geçerli olduğu sürece
+    /// katalog eşleşmesini bastırır.
+    private var manualSelection: ManualPlaceSelection?
 
     /// Ağ kaç tick'te bir yoklanır. Wi-Fi değişimi anlık algılanmak zorunda
     /// değil; 10 saniyelik gecikme oturum sınırlarını gözle görülür biçimde
@@ -77,6 +84,9 @@ public final class AppCoordinator {
         catalogStore = JSONFileStore(url: base.appendingPathComponent("places.json"))
         historyStore = JSONFileStore(url: base.appendingPathComponent("sessions.json"))
         stateStore = JSONFileStore(url: base.appendingPathComponent("state.json"))
+        preferencesStore = JSONFileStore(
+            url: base.appendingPathComponent("preferences.json")
+        )
     }
 
     // MARK: - Yaşam döngüsü
@@ -84,6 +94,7 @@ public final class AppCoordinator {
     public func start() async {
         catalog = (try? catalogStore.load()) ?? PlaceCatalog()
         history = (try? historyStore.load()) ?? []
+        preferences = (try? preferencesStore.load()) ?? Preferences()
 
         location.onAuthorizationChange = { [weak self] _ in
             guard let self else { return }
@@ -106,7 +117,11 @@ public final class AppCoordinator {
         if location.isAuthorized { location.startUpdating() }
 
         let state = (try? stateStore.load()) ?? AppState()
-        let restored = SessionEngine.restored(from: state, now: Date())
+        let restored = SessionEngine.restored(
+            from: state,
+            configuration: EngineConfiguration(preferences: preferences),
+            now: Date()
+        )
         engine = restored.engine
         handle(effects: restored.effects)
 
@@ -163,6 +178,15 @@ public final class AppCoordinator {
 
         let snapshot = WiFiReader.snapshot()
         defer { lastWiFi = snapshot }
+
+        // Manuel düzeltme, geçerli olduğu sürece katalog eşleşmesini bastırır.
+        if let selection = manualSelection {
+            if selection.applies(to: snapshot.ssid) {
+                apply(.placeResolved(.known(selection.placeID)), at: now)
+                return
+            }
+            manualSelection = nil
+        }
 
         switch catalog.resolve(ssid: snapshot.ssid, coordinate: location.coordinate) {
         case .matched(let place):
@@ -275,6 +299,71 @@ public final class AppCoordinator {
         catalog.displayName(for: placeID)
     }
 
+    // MARK: - Ayarlar
+
+    public func updatePreferences(_ preferences: Preferences) {
+        self.preferences = preferences
+        try? preferencesStore.save(preferences)
+        engine.updateConfiguration(
+            EngineConfiguration(preferences: preferences), at: Date()
+        )
+        refreshDisplay()
+    }
+
+    // MARK: - Manuel kontrol
+
+    /// Sayacı sıfırlar: oturumu kapatıp aynı yerde yenisini başlatır.
+    public func endCurrentSession() {
+        apply(.endSessionRequested)
+        refreshDisplay()
+    }
+
+    /// "Burası aslında şurası" düzeltmesi. Seçim, o anki ağa bağlanır ve ağ
+    /// değişene kadar otomatik eşleşmeyi bastırır.
+    public func overrideCurrentPlace(_ placeID: UUID) {
+        manualSelection = ManualPlaceSelection(placeID: placeID, ssid: lastWiFi?.ssid)
+        prompt = nil
+        apply(.placeResolved(.known(placeID)))
+        refreshDisplay()
+    }
+
+    // MARK: - Yer yönetimi
+
+    public var knownPlaces: [Place] {
+        catalog.places.sorted { $0.displayName < $1.displayName }
+    }
+
+    public func renamePlace(_ placeID: UUID, to name: String) {
+        catalog.rename(placeID, to: name)
+        persistCatalog()
+        refreshDisplay()
+    }
+
+    public func removePlace(_ placeID: UUID) {
+        catalog.remove(placeID)
+        if manualSelection?.placeID == placeID { manualSelection = nil }
+        persistCatalog()
+        refreshDisplay()
+    }
+
+    public func detachSSID(_ ssid: String, from placeID: UUID) {
+        catalog.detach(ssid: ssid, from: placeID)
+        persistCatalog()
+        refreshDisplay()
+    }
+
+    // MARK: - İstatistik
+
+    public func totals(for range: StatsRange) -> [PlaceTotal] {
+        placeTotals(from: allSessions, range: range, now: Date())
+    }
+
+    /// Geçmiş ve açık oturum birlikte; istatistik ikisini de saymalı.
+    private var allSessions: [Session] {
+        guard let current = engine.currentSession else { return history }
+        return history + [current]
+    }
+
     // MARK: - Diske yazma ve görüntü
 
     private func persistCatalog() {
@@ -299,6 +388,11 @@ public final class AppCoordinator {
             todays.append(current)
         }
         todaySessions = todays.sorted { $0.startedAt < $1.startedAt }
+
+        todaySegments = daySegments(from: allSessions, on: now)
+        todayHereSeconds = placeTotals(from: allSessions, range: .today, now: now)
+            .first { $0.placeID == engine.currentSession?.placeID }?
+            .totalSeconds ?? 0
     }
 
     public func quit() {
