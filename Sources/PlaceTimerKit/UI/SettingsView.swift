@@ -1,44 +1,33 @@
 import PlaceTimerCore
 import SwiftUI
 
-/// `Preferences` alanları için `Binding` üretir.
-///
-/// Tercihler koordinatörde `private(set)`: her değişiklik `updatePreferences`
-/// üzerinden geçmeli ki diske yazılsın ve motorun yapılandırması güncellensin.
-/// Doğrudan `@Bindable` kullanmak bu yolu atlardı.
-@MainActor
-func preferenceBinding<Value>(
-    _ coordinator: AppCoordinator,
-    _ keyPath: WritableKeyPath<Preferences, Value>
-) -> Binding<Value> {
-    Binding(
-        get: { coordinator.preferences[keyPath: keyPath] },
-        set: { newValue in
-            var updated = coordinator.preferences
-            updated[keyPath: keyPath] = newValue
-            coordinator.updatePreferences(updated)
-        }
-    )
-}
-
 public struct SettingsView: View {
     @Bindable var coordinator: AppCoordinator
+    @State private var tab: SettingsTab = .genel
 
     public init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
     }
 
     public var body: some View {
-        TabView {
-            GeneralSettingsView(coordinator: coordinator)
-                .tabItem { Label("Genel", systemImage: "gearshape") }
-            PlacesSettingsView(coordinator: coordinator)
-                .tabItem { Label("Yerler", systemImage: "mappin.and.ellipse") }
-            PermissionsSettingsView(coordinator: coordinator)
-                .tabItem { Label("İzinler", systemImage: "lock.shield") }
-            StatisticsSettingsView(coordinator: coordinator)
-                .tabItem { Label("İstatistik", systemImage: "chart.bar") }
+        TabView(selection: $tab) {
+            Tab("Genel", systemImage: "gearshape", value: SettingsTab.genel) {
+                GeneralSettingsView(coordinator: coordinator)
+            }
+            Tab("Yerler", systemImage: "mappin.and.ellipse", value: SettingsTab.yerler) {
+                PlacesSettingsView(coordinator: coordinator)
+            }
+            Tab("İzinler", systemImage: "lock.shield", value: SettingsTab.izinler) {
+                PermissionsSettingsView(coordinator: coordinator)
+            }
+            Tab("İstatistik", systemImage: "chart.bar", value: SettingsTab.istatistik) {
+                StatisticsSettingsView(coordinator: coordinator)
+            }
         }
-        .frame(width: 540, height: 500)
+        .frame(width: Design.settingsWidth, height: Design.settingsHeight)
     }
+}
+
+#Preview {
+    SettingsView(coordinator: AppCoordinator(directory: .temporaryDirectory))
 }

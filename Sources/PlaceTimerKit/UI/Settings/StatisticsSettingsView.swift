@@ -8,15 +8,15 @@ struct StatisticsSettingsView: View {
     private var totals: [PlaceTotal] { coordinator.totals(for: range) }
 
     var body: some View {
-        VStack(spacing: 12) {
-            Picker("", selection: $range) {
+        VStack(spacing: Design.medium) {
+            Picker("Aralık", selection: $range) {
                 ForEach(StatsRange.allCases, id: \.self) {
                     Text($0.displayName).tag($0)
                 }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .padding(.horizontal)
+            .padding(.horizontal, Design.large)
 
             if totals.isEmpty {
                 ContentUnavailableView(
@@ -39,13 +39,18 @@ struct StatisticsSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     TableColumn("Oturum") { total in
-                        Text("\(total.sessionCount)")
+                        Text(total.sessionCount, format: .number)
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
                 }
             }
         }
-        .padding(.vertical)
+        .padding(.vertical, Design.large)
     }
+}
+
+#Preview {
+    StatisticsSettingsView(coordinator: AppCoordinator(directory: .temporaryDirectory))
+        .frame(width: Design.settingsWidth, height: Design.settingsHeight)
 }

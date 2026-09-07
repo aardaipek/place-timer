@@ -3,71 +3,77 @@ import SwiftUI
 
 struct GeneralSettingsView: View {
     @Bindable var coordinator: AppCoordinator
-    @State private var launchesAtLogin = LoginItem.isEnabled
 
-    /// Eşikler serbest sayı değil, birkaç makul seçenek. Kullanıcının
-    /// "37 dakika" girmesine izin vermek karar yükünü artırır, karşılığı yok.
-    private let sleepOptions: [(String, TimeInterval)] = [
-        ("30 dakika", 30 * 60), ("1 saat", 60 * 60),
-        ("2 saat", 2 * 60 * 60), ("4 saat", 4 * 60 * 60),
-    ]
-    private let idleOptions: [(String, TimeInterval)] = [
-        ("2 dakika", 2 * 60), ("5 dakika", 5 * 60),
-        ("10 dakika", 10 * 60), ("15 dakika", 15 * 60),
-    ]
+    /// Tercihler koordinatörde `private(set)`: her değişiklik
+    /// `updatePreferences` üzerinden geçmeli ki diske yazılsın ve motorun
+    /// yapılandırması güncellensin. Gövde içinde elle `Binding` kurmak yerine
+    /// yerel bir taslak tutuluyor; değişim `onChange` ile koordinatöre geçiyor.
+    @State private var draft = Preferences()
+    @State private var launchesAtLogin = LoginItem.isEnabled
 
     var body: some View {
         Form {
             Section("Görünüm") {
-                Toggle(
-                    "Saniyeleri göster",
-                    isOn: preferenceBinding(coordinator, \.showSeconds)
-                )
-                Toggle(
-                    "Menubar'da yerin adını göster",
-                    isOn: preferenceBinding(coordinator, \.showPlaceNameInMenuBar)
-                )
+                Toggle("Saniyeleri göster", isOn: $draft.showSeconds)
+                Toggle("Menubar'da yerin adını göster", isOn: $draft.showPlaceNameInMenuBar)
             }
 
-            Section("Davranış") {
+            Section {
                 Picker(
                     "Oturumu sıfırlayan uyku süresi",
-                    selection: preferenceBinding(coordinator, \.sessionResetSleepThreshold)
+                    selection: $draft.sessionResetSleepThreshold
                 ) {
-                    ForEach(sleepOptions, id: \.1) { Text($0.0).tag($0.1) }
+                    ForEach(ThresholdOption.sleep) { Text($0.title).tag($0.seconds) }
                 }
-                Text("Bu süreden kısa uykular oturumu bozmaz — kahve molası gibi.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
 
                 Picker(
                     "Aktif sayacı durduran hareketsizlik",
-                    selection: preferenceBinding(coordinator, \.idleThreshold)
+                    selection: $draft.idleThreshold
                 ) {
-                    ForEach(idleOptions, id: \.1) { Text($0.0).tag($0.1) }
+                    ForEach(ThresholdOption.idle) { Text($0.title).tag($0.seconds) }
                 }
 
-                Picker(
-                    "Bildirim sıklığı",
-                    selection: preferenceBinding(coordinator, \.notificationInterval)
-                ) {
+                Picker("Bildirim sıklığı", selection: $draft.notificationInterval) {
                     ForEach(NotificationInterval.allCases, id: \.self) {
                         Text($0.displayName).tag($0)
                     }
                 }
+            } header: {
+                Text("Davranış")
+            } footer: {
+                Text("Uyku eşiğinden kısa molalar oturumu bozmaz — kahve molası gibi.")
+                    .foregroundStyle(.secondary)
             }
 
             Section("Başlangıç") {
-                Toggle("Açılışta başlat", isOn: Binding(
-                    get: { launchesAtLogin },
-                    set: { yeni in
-                        if yeni { LoginItem.enable() } else { LoginItem.disable() }
-                        launchesAtLogin = LoginItem.isEnabled
-                    }
-                ))
+                Toggle("Açılışta başlat", isOn: $launchesAtLogin)
             }
         }
         .formStyle(.grouped)
-        .onAppear { launchesAtLogin = LoginItem.isEnabled }
+        .task {
+            draft = coordinator.preferences
+            launchesAtLogin = LoginItem.isEnabled
+        }
+        .onChange(of: draft) { _, yeni in
+            guard yeni != coordinator.preferences else { return }
+            coordinator.updatePreferences(yeni)
+        }
+        .onChange(of: launchesAtLogin) { _, yeni in
+            updateLoginItem(to: yeni)
+        }
     }
+
+    /// Kayit basarisiz olabilir (SMAppService hata atar); anahtar bu yuzden
+    /// istegin degil gercek durumun pesine takiliyor. Gercek durum istenenle
+    /// ayni ciktiginda `onChange` yeniden tetiklenmez, dongu olusmaz.
+    private func updateLoginItem(to enabled: Bool) {
+        guard enabled != LoginItem.isEnabled else { return }
+        if enabled { LoginItem.enable() } else { LoginItem.disable() }
+        launchesAtLogin = LoginItem.isEnabled
+    }
+}
+
+#Preview {
+    GeneralSettingsView(coordinator: AppCoordinator(directory: .temporaryDirectory))
+        .frame(width: Design.settingsWidth, height: Design.settingsHeight)
 }
