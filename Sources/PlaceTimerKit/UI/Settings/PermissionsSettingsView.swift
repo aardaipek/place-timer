@@ -34,6 +34,7 @@ struct PermissionsSettingsView: View {
                 )
             } header: {
                 Text(durumBasligi)
+                    .monospacedDigit()
             } footer: {
                 Text(
                     "Konum verisi cihazdan dışarı çıkmaz; hiçbir sunucuya bir şey "

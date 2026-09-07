@@ -55,6 +55,7 @@ struct PlaceRowView: View {
             Text(agSayisi)
                 .font(.callout)
                 .foregroundStyle(.secondary)
+                .monospacedDigit()
         }
     }
 

@@ -18,7 +18,11 @@ public struct PlaceTimerScene: Scene {
         MenuBarExtra {
             PanelView(coordinator: coordinator)
         } label: {
+            // Tabular rakam: menubar başlığı saniyede bir yeniden yazılıyor ve
+            // orantılı rakamlarda her basamak değişiminde metnin eni oynuyor,
+            // yanındaki simgeler de onunla birlikte kayıyordu.
             Text(menuBarTitle)
+                .monospacedDigit()
         }
         .menuBarExtraStyle(.window)
     }

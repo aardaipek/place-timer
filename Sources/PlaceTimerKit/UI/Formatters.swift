@@ -3,6 +3,10 @@ import PlaceTimerCore
 
 public enum DurationFormat {
     /// Menubar ve panel başlığı için: `2:14` veya `2:14:07`.
+    ///
+    /// Saat hanesi ancak dolduğunda görünür. Günün ilk saatinde baştaki sıfır
+    /// hiçbir şey söylemiyor — "0:14" ile "14" aynı bilgi — ama menubar'da yer
+    /// kaplıyor ve gözün her bakışta atlaması gereken bir hane ekliyor.
     public static func clock(
         _ seconds: TimeInterval,
         showSeconds: Bool = false
@@ -10,10 +14,15 @@ public enum DurationFormat {
         let total = Int(max(0, seconds))
         let hours = total / 3600
         let minutes = (total % 3600) / 60
+        let remainder = total % 60
+
+        guard hours > 0 else {
+            return showSeconds ? String(format: "%d:%02d", minutes, remainder) : "\(minutes)"
+        }
         guard showSeconds else {
             return String(format: "%d:%02d", hours, minutes)
         }
-        return String(format: "%d:%02d:%02d", hours, minutes, total % 60)
+        return String(format: "%d:%02d:%02d", hours, minutes, remainder)
     }
 
     /// Okunur biçim: `1sa 47dk`, `47dk`, `3dk`.
