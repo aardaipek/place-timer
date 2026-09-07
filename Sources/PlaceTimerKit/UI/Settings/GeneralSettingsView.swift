@@ -13,40 +13,58 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Görünüm") {
+            Section {
                 Toggle("Saniyeleri göster", isOn: $draft.showSeconds)
-                Toggle("Menubar'da yerin adını göster", isOn: $draft.showPlaceNameInMenuBar)
+                Toggle("Yerin adını göster", isOn: $draft.showPlaceNameInMenuBar)
+            } header: {
+                Text("Menubar")
+            } footer: {
+                menuBarPreview
             }
 
             Section {
-                Picker(
-                    "Oturumu sıfırlayan uyku süresi",
-                    selection: $draft.sessionResetSleepThreshold
-                ) {
+                Picker("Uyku eşiği", selection: $draft.sessionResetSleepThreshold) {
                     ForEach(ThresholdOption.sleep) { Text($0.title).tag($0.seconds) }
                 }
 
-                Picker(
-                    "Aktif sayacı durduran hareketsizlik",
-                    selection: $draft.idleThreshold
-                ) {
+                Picker("Hareketsizlik eşiği", selection: $draft.idleThreshold) {
                     ForEach(ThresholdOption.idle) { Text($0.title).tag($0.seconds) }
                 }
+            } header: {
+                Text("Oturum")
+            } footer: {
+                Text(
+                    "Uyku eşiği oturumun ne zaman kapanacağını, hareketsizlik eşiği "
+                        + "aktif çalışma sayacının ne zaman duracağını belirler. "
+                        + "Eşikten kısa molalar — kahve almak, tuvalet — oturumu bozmaz."
+                )
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
 
-                Picker("Bildirim sıklığı", selection: $draft.notificationInterval) {
+            Section {
+                Picker("Sıklık", selection: $draft.notificationInterval) {
                     ForEach(NotificationInterval.allCases, id: \.self) {
                         Text($0.displayName).tag($0)
                     }
                 }
             } header: {
-                Text("Davranış")
+                Text("Bildirimler")
             } footer: {
-                Text("Uyku eşiğinden kısa molalar oturumu bozmaz — kahve molası gibi.")
-                    .foregroundStyle(.secondary)
+                notificationFooter
             }
 
-            Section("Başlangıç") {
+            Section {
                 Toggle("Açılışta başlat", isOn: $launchesAtLogin)
+            } header: {
+                Text("Başlangıç")
+            } footer: {
+                Text(
+                    "Kapalıyken PlaceTimer'ı elle açmadığın sürece günün ilk "
+                        + "saatleri kaydedilmez."
+                )
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
@@ -63,6 +81,49 @@ struct GeneralSettingsView: View {
         }
     }
 
+    /// İki anahtarın ne yaptığını anlatmak yerine gösteriyoruz: buradaki
+    /// başlık menubar'daki metnin ta kendisi, aynı işlevden üretiliyor.
+    private var menuBarPreview: some View {
+        HStack(spacing: Design.small) {
+            Text("Şöyle görünür")
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: Design.small)
+
+            Text(
+                MenuBarTitle.text(
+                    placeName: coordinator.placeName,
+                    elapsed: coordinator.elapsed,
+                    preferences: draft
+                )
+            )
+            .monospacedDigit()
+            .lineLimit(1)
+            .padding(.horizontal, Design.small)
+            .padding(.vertical, Design.tight)
+            .glassEffect(in: .capsule)
+        }
+        .animation(.snappy, value: draft)
+    }
+
+    @ViewBuilder
+    private var notificationFooter: some View {
+        if draft.notificationInterval == .off {
+            Text("Kapalıyken hiç hatırlatma gelmez; sayaç yine de işler.")
+                .foregroundStyle(.secondary)
+        } else if coordinator.needsNotificationPermission {
+            Label(
+                "Bildirim izni yok; İzinler sekmesinden verilene kadar bu ayar etkisiz.",
+                systemImage: "exclamationmark.triangle"
+            )
+            .foregroundStyle(.orange)
+            .fixedSize(horizontal: false, vertical: true)
+        } else {
+            Text("Bulunduğun yerde ne kadar oturduğunu bu aralıkla hatırlatır.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
     /// Kayit basarisiz olabilir (SMAppService hata atar); anahtar bu yuzden
     /// istegin degil gercek durumun pesine takiliyor. Gercek durum istenenle
     /// ayni ciktiginda `onChange` yeniden tetiklenmez, dongu olusmaz.
@@ -75,5 +136,5 @@ struct GeneralSettingsView: View {
 
 #Preview {
     GeneralSettingsView(coordinator: AppCoordinator(directory: .temporaryDirectory))
-        .frame(width: Design.settingsWidth, height: Design.settingsHeight)
+        .frame(width: Design.settingsPaneWidth, height: Design.settingsHeight)
 }

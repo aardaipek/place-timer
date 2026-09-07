@@ -29,9 +29,10 @@ Gereksinim: **macOS 26+** (Liquid Glass arayuz).
 
 ## Ayarlar
 
-Menubar panelindeki disli dugmesi dort sekmeli ayarlar penceresini acar:
+Menubar panelindeki disli dugmesi ayarlar penceresini acar. Pencerenin
+solundaki kenar cubugunda dort bolum var:
 
-| Sekme | Icerik |
+| Bolum | Icerik |
 |---|---|
 | Genel | Saniye gosterimi, menubar'da yer adi, esikler, bildirim sikligi, acilista baslat |
 | Yerler | Kayitli yerler: ad degistir, SSID ayir, sil |

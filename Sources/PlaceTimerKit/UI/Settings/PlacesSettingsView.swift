@@ -1,45 +1,52 @@
 import PlaceTimerCore
 import SwiftUI
 
+/// Kayıtlı yerler.
+///
+/// Eskiden `NavigationSplitView`'dı. Tercih penceresi genişliğinde iki sütun
+/// demek, solda üç beş satırlık bir liste ve sağda çoğu zaman "Yer seçilmedi"
+/// yazan boş bir sütun demekti: pencerenin yarısı hiçbir şey göstermiyordu.
+/// Bir tercih sekmesinin içine tam bir gezinme yığını koymak ayrıca sekmenin
+/// kendi başlık çubuğuyla yarışan ikinci bir kabuk üretiyordu.
+///
+/// Tek sütun ve satır içinde açılan ayrıntı aynı işi boş alan bırakmadan
+/// yapar; seçili olmayan yerler de görünür kalır.
 struct PlacesSettingsView: View {
     @Bindable var coordinator: AppCoordinator
-    @State private var selection: UUID?
 
-    /// `HSplitView` yerine `NavigationSplitView`: eskisi `TabView` icinde kendi
-    /// ideal yuksekligine buzusup pencerenin altina yapisiyordu ve her iki
-    /// sutuna elle `maxHeight: .infinity` vermek gerekiyordu.
     var body: some View {
-        NavigationSplitView {
-            List(coordinator.knownPlaces, selection: $selection) { place in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(place.displayName)
-                    Text("\(place.ssids.count) ağ")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .tag(place.id)
-            }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
-        } detail: {
-            if let place = secili {
-                PlaceDetailView(coordinator: coordinator, place: place)
-            } else {
-                ContentUnavailableView(
-                    "Yer seçilmedi",
-                    systemImage: "mappin.slash",
-                    description: Text("Soldaki listeden bir yer seç.")
+        if coordinator.knownPlaces.isEmpty {
+            ContentUnavailableView {
+                Label("Kayıtlı yer yok", systemImage: "mappin.slash")
+            } description: {
+                Text(
+                    "Tanımadığı bir Wi-Fi ağına bağlandığında PlaceTimer burayı "
+                        + "sorar; verdiğin ad buraya düşer."
                 )
             }
+        } else {
+            Form {
+                Section {
+                    ForEach(coordinator.knownPlaces) { place in
+                        PlaceRowView(coordinator: coordinator, place: place)
+                    }
+                } header: {
+                    Text("Kayıtlı yerler")
+                } footer: {
+                    Text(
+                        "Bir yer birden çok ağ tutabilir: router'lar 2.4 ve 5 GHz "
+                            + "bantlarını çoğu zaman ayrı adlarla yayınlar."
+                    )
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .formStyle(.grouped)
         }
-        .navigationSplitViewStyle(.balanced)
-    }
-
-    private var secili: Place? {
-        coordinator.knownPlaces.first { $0.id == selection }
     }
 }
 
 #Preview {
     PlacesSettingsView(coordinator: AppCoordinator(directory: .temporaryDirectory))
-        .frame(width: Design.settingsWidth, height: Design.settingsHeight)
+        .frame(width: Design.settingsPaneWidth, height: Design.settingsHeight)
 }

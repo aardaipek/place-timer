@@ -17,6 +17,16 @@ enum Design {
     /// Gün şeridinin kalınlığı. Şerit panelin tabanında ince bir çizgi.
     static let stripHeight: CGFloat = 6
 
-    static let settingsWidth: CGFloat = 540
-    static let settingsHeight: CGFloat = 500
+    /// Yer rengini taşıyan nokta. Panelde, yerler listesinde ve istatistikte
+    /// aynı çapta: aynı şeyi gösteren üç yerde üç ayrı boyut, göz için üç ayrı
+    /// simge demek.
+    static let dotSize: CGFloat = 8
+
+    /// Ayarlar penceresi. Ölçü sabit: bölüm başına farklı bir boy pencereyi
+    /// her tıklamada zıplatır ve zıplayan pencerede kenar çubuğu da yer
+    /// değiştirip ikinci tıklamayı ıskalatır.
+    static let settingsSidebarWidth: CGFloat = 170
+    static let settingsPaneWidth: CGFloat = 430
+    static let settingsWidth: CGFloat = settingsSidebarWidth + settingsPaneWidth
+    static let settingsHeight: CGFloat = 460
 }

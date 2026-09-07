@@ -15,7 +15,7 @@ struct PanelHeaderView: View {
         HStack(spacing: Design.small) {
             Circle()
                 .fill(PlaceColor.color(for: coordinator.currentPlaceID))
-                .frame(width: Design.small, height: Design.small)
+                .frame(width: Design.dotSize, height: Design.dotSize)
                 .accessibilityHidden(true)
 
             Text(coordinator.placeName)

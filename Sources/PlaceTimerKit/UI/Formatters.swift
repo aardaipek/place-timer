@@ -1,4 +1,5 @@
 import Foundation
+import PlaceTimerCore
 
 public enum DurationFormat {
     /// Menubar ve panel başlığı için: `2:14` veya `2:14:07`.
@@ -37,5 +38,24 @@ public enum DurationFormat {
     public static func truncate(_ name: String, to limit: Int = 12) -> String {
         guard name.count > limit else { return name }
         return name.prefix(limit - 1).trimmingCharacters(in: .whitespaces) + "…"
+    }
+}
+
+/// Menubar başlığının kuruluşu.
+///
+/// Hem sahne hem de ayarlardaki önizleme aynı metni üretmek zorunda: önizleme
+/// biçimi kendi kurarsa kullanıcı ayarı değiştirir, önizleme bir şey gösterir,
+/// menubar başka bir şey. Tek kaynak burası.
+public enum MenuBarTitle {
+    public static func text(
+        placeName: String,
+        elapsed: TimeInterval,
+        preferences: Preferences,
+        needsLocationPermission: Bool = false
+    ) -> String {
+        guard !needsLocationPermission else { return "◷ İzin gerekli" }
+        let time = DurationFormat.clock(elapsed, showSeconds: preferences.showSeconds)
+        guard preferences.showPlaceNameInMenuBar else { return time }
+        return "\(DurationFormat.truncate(placeName)) · \(time)"
     }
 }

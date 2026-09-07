@@ -32,10 +32,31 @@ struct PermissionsSettingsView: View {
                     pane: .loginItems,
                     action: enableLoginItem
                 )
+            } header: {
+                Text(durumBasligi)
+            } footer: {
+                Text(
+                    "Konum verisi cihazdan dışarı çıkmaz; hiçbir sunucuya bir şey "
+                        + "gönderilmez."
+                )
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
         .task(watchPermissions)
+    }
+
+    /// Başlık durumu söylüyor: üç satırın simgelerini tek tek okumadan
+    /// "her şey yerinde mi" sorusunun cevabı görünsün.
+    private var durumBasligi: String {
+        let eksik = [
+            coordinator.needsLocationPermission,
+            coordinator.needsNotificationPermission,
+            !launchesAtLogin,
+        ].count(where: { $0 })
+
+        return eksik == 0 ? "Tümü hazır" : "\(eksik) eksik"
     }
 
     /// Izinler uygulama disinda da degisebilir (Sistem Ayarlari'ndan); sekme
@@ -61,5 +82,5 @@ struct PermissionsSettingsView: View {
 
 #Preview {
     PermissionsSettingsView(coordinator: AppCoordinator(directory: .temporaryDirectory))
-        .frame(width: Design.settingsWidth, height: Design.settingsHeight)
+        .frame(width: Design.settingsPaneWidth, height: Design.settingsHeight)
 }

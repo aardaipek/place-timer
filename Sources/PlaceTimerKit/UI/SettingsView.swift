@@ -1,6 +1,17 @@
 import PlaceTimerCore
 import SwiftUI
 
+/// Ayarlar penceresi.
+///
+/// Eskiden `TabView`'dı. Kendi penceremizin içinde `TabView` sekmeleri
+/// içeriğin tepesine basıyor: üstte pencere başlığı, hemen altında sekme
+/// şeridi — iki katlı bir kabuk ve eski System Preferences görüntüsü.
+/// (Sekmeleri başlık çubuğuna taşıyan `Settings` sahnesi bu uygulamada
+/// çalışmıyor; nedeni `PlaceTimerAppDelegate`'te yazılı.)
+///
+/// Kenar çubuğu hem bu çift başlığı kaldırıyor hem de bölüm adlarını
+/// kısaltmadan gösteriyor: dört simgenin altına sıkışan metinler yerine
+/// okunur bir liste. Seçili bölümün adı pencere başlığına da geçiyor.
 public struct SettingsView: View {
     @Bindable var coordinator: AppCoordinator
     @State private var tab: SettingsTab = .genel
@@ -10,21 +21,29 @@ public struct SettingsView: View {
     }
 
     public var body: some View {
-        TabView(selection: $tab) {
-            Tab("Genel", systemImage: "gearshape", value: SettingsTab.genel) {
-                GeneralSettingsView(coordinator: coordinator)
+        NavigationSplitView {
+            List(SettingsTab.allCases, selection: $tab) { bolum in
+                Label(bolum.title, systemImage: bolum.symbol)
+                    .tag(bolum)
             }
-            Tab("Yerler", systemImage: "mappin.and.ellipse", value: SettingsTab.yerler) {
-                PlacesSettingsView(coordinator: coordinator)
-            }
-            Tab("İzinler", systemImage: "lock.shield", value: SettingsTab.izinler) {
-                PermissionsSettingsView(coordinator: coordinator)
-            }
-            Tab("İstatistik", systemImage: "chart.bar", value: SettingsTab.istatistik) {
-                StatisticsSettingsView(coordinator: coordinator)
-            }
+            .navigationSplitViewColumnWidth(Design.settingsSidebarWidth)
+        } detail: {
+            pane
+                .navigationTitle(tab.title)
+                .frame(minWidth: Design.settingsPaneWidth, maxHeight: .infinity)
         }
+        .navigationSplitViewStyle(.balanced)
         .frame(width: Design.settingsWidth, height: Design.settingsHeight)
+    }
+
+    @ViewBuilder
+    private var pane: some View {
+        switch tab {
+        case .genel: GeneralSettingsView(coordinator: coordinator)
+        case .yerler: PlacesSettingsView(coordinator: coordinator)
+        case .izinler: PermissionsSettingsView(coordinator: coordinator)
+        case .istatistik: StatisticsSettingsView(coordinator: coordinator)
+        }
     }
 }
 
