@@ -18,11 +18,10 @@ public struct PlaceTimerScene: Scene {
         MenuBarExtra {
             PanelView(coordinator: coordinator)
         } label: {
-            // Tabular rakam: menubar başlığı saniyede bir yeniden yazılıyor ve
-            // orantılı rakamlarda her basamak değişiminde metnin eni oynuyor,
-            // yanındaki simgeler de onunla birlikte kayıyordu.
-            Text(menuBarTitle)
-                .monospacedDigit()
+            // Etiket `Text` değil, çizilmiş bir görüntü. Nedeni
+            // `MenuBarLabel`de yazılı: SwiftUI biçimi menubar öğesine
+            // taşımıyor ve başlık her saniye enini değiştiriyordu.
+            Image(nsImage: MenuBarLabel.image(for: menuBarTitle))
         }
         .menuBarExtraStyle(.window)
     }
