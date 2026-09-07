@@ -3,71 +3,138 @@ import SwiftUI
 
 struct GeneralSettingsView: View {
     @Bindable var coordinator: AppCoordinator
-    @State private var launchesAtLogin = LoginItem.isEnabled
 
-    /// Eşikler serbest sayı değil, birkaç makul seçenek. Kullanıcının
-    /// "37 dakika" girmesine izin vermek karar yükünü artırır, karşılığı yok.
-    private let sleepOptions: [(String, TimeInterval)] = [
-        ("30 dakika", 30 * 60), ("1 saat", 60 * 60),
-        ("2 saat", 2 * 60 * 60), ("4 saat", 4 * 60 * 60),
-    ]
-    private let idleOptions: [(String, TimeInterval)] = [
-        ("2 dakika", 2 * 60), ("5 dakika", 5 * 60),
-        ("10 dakika", 10 * 60), ("15 dakika", 15 * 60),
-    ]
+    /// Tercihler koordinatörde `private(set)`: her değişiklik
+    /// `updatePreferences` üzerinden geçmeli ki diske yazılsın ve motorun
+    /// yapılandırması güncellensin. Gövde içinde elle `Binding` kurmak yerine
+    /// yerel bir taslak tutuluyor; değişim `onChange` ile koordinatöre geçiyor.
+    @State private var draft = Preferences()
+    @State private var launchesAtLogin = LoginItem.isEnabled
 
     var body: some View {
         Form {
-            Section("Görünüm") {
-                Toggle(
-                    "Saniyeleri göster",
-                    isOn: preferenceBinding(coordinator, \.showSeconds)
-                )
-                Toggle(
-                    "Menubar'da yerin adını göster",
-                    isOn: preferenceBinding(coordinator, \.showPlaceNameInMenuBar)
-                )
+            Section {
+                Toggle("Saniyeleri göster", isOn: $draft.showSeconds)
+                Toggle("Yerin adını göster", isOn: $draft.showPlaceNameInMenuBar)
+            } header: {
+                Text("Menubar")
+            } footer: {
+                menuBarPreview
             }
 
-            Section("Davranış") {
-                Picker(
-                    "Oturumu sıfırlayan uyku süresi",
-                    selection: preferenceBinding(coordinator, \.sessionResetSleepThreshold)
-                ) {
-                    ForEach(sleepOptions, id: \.1) { Text($0.0).tag($0.1) }
-                }
-                Text("Bu süreden kısa uykular oturumu bozmaz — kahve molası gibi.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Picker(
-                    "Aktif sayacı durduran hareketsizlik",
-                    selection: preferenceBinding(coordinator, \.idleThreshold)
-                ) {
-                    ForEach(idleOptions, id: \.1) { Text($0.0).tag($0.1) }
+            Section {
+                Picker("Uyku eşiği", selection: $draft.sessionResetSleepThreshold) {
+                    ForEach(ThresholdOption.sleep) { Text($0.title).tag($0.seconds) }
                 }
 
-                Picker(
-                    "Bildirim sıklığı",
-                    selection: preferenceBinding(coordinator, \.notificationInterval)
-                ) {
+                Picker("Hareketsizlik eşiği", selection: $draft.idleThreshold) {
+                    ForEach(ThresholdOption.idle) { Text($0.title).tag($0.seconds) }
+                }
+            } header: {
+                Text("Oturum")
+            } footer: {
+                Text(
+                    "Uyku eşiği oturumun ne zaman kapanacağını, hareketsizlik eşiği "
+                        + "aktif çalışma sayacının ne zaman duracağını belirler. "
+                        + "Eşikten kısa molalar — kahve almak, tuvalet — oturumu bozmaz."
+                )
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section {
+                Picker("Sıklık", selection: $draft.notificationInterval) {
                     ForEach(NotificationInterval.allCases, id: \.self) {
                         Text($0.displayName).tag($0)
                     }
                 }
+            } header: {
+                Text("Bildirimler")
+            } footer: {
+                notificationFooter
             }
 
-            Section("Başlangıç") {
-                Toggle("Açılışta başlat", isOn: Binding(
-                    get: { launchesAtLogin },
-                    set: { yeni in
-                        if yeni { LoginItem.enable() } else { LoginItem.disable() }
-                        launchesAtLogin = LoginItem.isEnabled
-                    }
-                ))
+            Section {
+                Toggle("Açılışta başlat", isOn: $launchesAtLogin)
+            } header: {
+                Text("Başlangıç")
+            } footer: {
+                Text(
+                    "Kapalıyken PlaceTimer'ı elle açmadığın sürece günün ilk "
+                        + "saatleri kaydedilmez."
+                )
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
-        .onAppear { launchesAtLogin = LoginItem.isEnabled }
+        .task {
+            draft = coordinator.preferences
+            launchesAtLogin = LoginItem.isEnabled
+        }
+        .onChange(of: draft) { _, yeni in
+            guard yeni != coordinator.preferences else { return }
+            coordinator.updatePreferences(yeni)
+        }
+        .onChange(of: launchesAtLogin) { _, yeni in
+            updateLoginItem(to: yeni)
+        }
     }
+
+    /// İki anahtarın ne yaptığını anlatmak yerine gösteriyoruz: buradaki
+    /// başlık menubar'daki metnin ta kendisi, aynı işlevden üretiliyor.
+    private var menuBarPreview: some View {
+        HStack(spacing: Design.small) {
+            Text("Şöyle görünür")
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: Design.small)
+
+            Text(
+                MenuBarTitle.text(
+                    placeName: coordinator.placeName,
+                    elapsed: coordinator.elapsed,
+                    preferences: draft
+                )
+            )
+            .monospacedDigit()
+            .lineLimit(1)
+            .padding(.horizontal, Design.small)
+            .padding(.vertical, Design.tight)
+            .glassEffect(in: .capsule)
+        }
+        .animation(.snappy, value: draft)
+    }
+
+    @ViewBuilder
+    private var notificationFooter: some View {
+        if draft.notificationInterval == .off {
+            Text("Kapalıyken hiç hatırlatma gelmez; sayaç yine de işler.")
+                .foregroundStyle(.secondary)
+        } else if coordinator.needsNotificationPermission {
+            Label(
+                "Bildirim izni yok; İzinler sekmesinden verilene kadar bu ayar etkisiz.",
+                systemImage: "exclamationmark.triangle"
+            )
+            .foregroundStyle(.orange)
+            .fixedSize(horizontal: false, vertical: true)
+        } else {
+            Text("Bulunduğun yerde ne kadar oturduğunu bu aralıkla hatırlatır.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Kayit basarisiz olabilir (SMAppService hata atar); anahtar bu yuzden
+    /// istegin degil gercek durumun pesine takiliyor. Gercek durum istenenle
+    /// ayni ciktiginda `onChange` yeniden tetiklenmez, dongu olusmaz.
+    private func updateLoginItem(to enabled: Bool) {
+        guard enabled != LoginItem.isEnabled else { return }
+        if enabled { LoginItem.enable() } else { LoginItem.disable() }
+        launchesAtLogin = LoginItem.isEnabled
+    }
+}
+
+#Preview {
+    GeneralSettingsView(coordinator: AppCoordinator(directory: .temporaryDirectory))
+        .frame(width: Design.settingsPaneWidth, height: Design.settingsHeight)
 }

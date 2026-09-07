@@ -1,44 +1,52 @@
 import PlaceTimerCore
 import SwiftUI
 
-/// `Preferences` alanları için `Binding` üretir.
+/// Ayarlar penceresi.
 ///
-/// Tercihler koordinatörde `private(set)`: her değişiklik `updatePreferences`
-/// üzerinden geçmeli ki diske yazılsın ve motorun yapılandırması güncellensin.
-/// Doğrudan `@Bindable` kullanmak bu yolu atlardı.
-@MainActor
-func preferenceBinding<Value>(
-    _ coordinator: AppCoordinator,
-    _ keyPath: WritableKeyPath<Preferences, Value>
-) -> Binding<Value> {
-    Binding(
-        get: { coordinator.preferences[keyPath: keyPath] },
-        set: { newValue in
-            var updated = coordinator.preferences
-            updated[keyPath: keyPath] = newValue
-            coordinator.updatePreferences(updated)
-        }
-    )
-}
-
+/// Eskiden `TabView`'dı. Kendi penceremizin içinde `TabView` sekmeleri
+/// içeriğin tepesine basıyor: üstte pencere başlığı, hemen altında sekme
+/// şeridi — iki katlı bir kabuk ve eski System Preferences görüntüsü.
+/// (Sekmeleri başlık çubuğuna taşıyan `Settings` sahnesi bu uygulamada
+/// çalışmıyor; nedeni `PlaceTimerAppDelegate`'te yazılı.)
+///
+/// Kenar çubuğu hem bu çift başlığı kaldırıyor hem de bölüm adlarını
+/// kısaltmadan gösteriyor: dört simgenin altına sıkışan metinler yerine
+/// okunur bir liste. Seçili bölümün adı pencere başlığına da geçiyor.
 public struct SettingsView: View {
     @Bindable var coordinator: AppCoordinator
+    @State private var tab: SettingsTab = .genel
 
     public init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
     }
 
     public var body: some View {
-        TabView {
-            GeneralSettingsView(coordinator: coordinator)
-                .tabItem { Label("Genel", systemImage: "gearshape") }
-            PlacesSettingsView(coordinator: coordinator)
-                .tabItem { Label("Yerler", systemImage: "mappin.and.ellipse") }
-            PermissionsSettingsView(coordinator: coordinator)
-                .tabItem { Label("İzinler", systemImage: "lock.shield") }
-            StatisticsSettingsView(coordinator: coordinator)
-                .tabItem { Label("İstatistik", systemImage: "chart.bar") }
+        NavigationSplitView {
+            List(SettingsTab.allCases, selection: $tab) { bolum in
+                Label(bolum.title, systemImage: bolum.symbol)
+                    .tag(bolum)
+            }
+            .navigationSplitViewColumnWidth(Design.settingsSidebarWidth)
+        } detail: {
+            pane
+                .navigationTitle(tab.title)
+                .frame(minWidth: Design.settingsPaneWidth, maxHeight: .infinity)
         }
-        .frame(width: 540, height: 500)
+        .navigationSplitViewStyle(.balanced)
+        .frame(width: Design.settingsWidth, height: Design.settingsHeight)
     }
+
+    @ViewBuilder
+    private var pane: some View {
+        switch tab {
+        case .genel: GeneralSettingsView(coordinator: coordinator)
+        case .yerler: PlacesSettingsView(coordinator: coordinator)
+        case .izinler: PermissionsSettingsView(coordinator: coordinator)
+        case .istatistik: StatisticsSettingsView(coordinator: coordinator)
+        }
+    }
+}
+
+#Preview {
+    SettingsView(coordinator: AppCoordinator(directory: .temporaryDirectory))
 }

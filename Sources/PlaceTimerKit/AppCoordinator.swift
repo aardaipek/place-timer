@@ -46,6 +46,7 @@ public final class AppCoordinator {
     public private(set) var todayHereSeconds: TimeInterval = 0
 
     public var currentPlaceID: UUID? { engine.currentSession?.placeID }
+    public var sessionStartedAt: Date? { engine.currentSession?.startedAt }
 
     // MARK: Bağımlılıklar
 

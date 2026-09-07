@@ -24,25 +24,46 @@ public struct PlaceTimerScene: Scene {
     }
 
     private var menuBarTitle: String {
-        guard !coordinator.needsLocationPermission else { return "◷ İzin gerekli" }
-        let time = DurationFormat.clock(
-            coordinator.elapsed,
-            showSeconds: coordinator.preferences.showSeconds
+        MenuBarTitle.text(
+            placeName: coordinator.placeName,
+            elapsed: coordinator.elapsed,
+            preferences: coordinator.preferences,
+            needsLocationPermission: coordinator.needsLocationPermission
         )
-        guard coordinator.preferences.showPlaceNameInMenuBar else { return time }
-        return "\(DurationFormat.truncate(coordinator.placeName)) · \(time)"
     }
 }
 
-/// Uygulamanın tek durum sahibi. Koordinatörü başlatır, izin sihirbazını ve
-/// yeni yer sorusunu kendi pencerelerinde gösterir.
+/// Uygulamanın tek durum sahibi. Koordinatörü başlatır, izin sihirbazını,
+/// ayarları ve yeni yer sorusunu kendi pencerelerinde gösterir.
+///
+/// Ayarlar için SwiftUI'nin `Settings` sahnesi denendi ve **çalışmıyor**:
+/// sahne uygulama menüsüne "Settings…" öğesini ekliyor, ama `LSUIElement`
+/// bir uygulamada — ne o menü öğesine tıklandığında ne de
+/// `showSettingsWindow:` eylemi gönderildiğinde — pencere sunuluyor. Dock
+/// simgesi olmayan uygulama etkinleşemediği için sahne sessizce hiçbir şey
+/// yapmıyor. `AppWindow` etkinleştirme politikasını geçici olarak `.regular`
+/// yapıp pencereyi kendi açtığı için bu uygulamada çalışan tek yol o.
 @MainActor
 public final class PlaceTimerAppDelegate: NSObject, NSApplicationDelegate {
+    /// Panelin pencere açtırabilmesi için tek örneğe erişim.
+    ///
+    /// `NSApp.delegate` bu sınıfı **vermez**: SwiftUI,
+    /// `NSApplicationDelegateAdaptor` ile verilen nesneyi kendi
+    /// `SwiftUI.AppDelegate` sarmalayıcısının arkasına koyar ve mesajları ona
+    /// iletir. `NSApp.delegate as? PlaceTimerAppDelegate` bu yüzden sessizce
+    /// `nil` döner — ayarlar düğmesi tam olarak bu yüzden hiçbir şey yapmıyordu.
+    public private(set) static weak var shared: PlaceTimerAppDelegate?
+
     public let coordinator = AppCoordinator()
 
     private let onboardingWindow = AppWindow(title: "PlaceTimer")
     private let promptWindow = AppWindow(title: "Yeni yer")
-    private let settingsWindow = AppWindow(title: "PlaceTimer Ayarları")
+    private let settingsWindow = AppWindow(title: "Ayarlar")
+
+    public override init() {
+        super.init()
+        Self.shared = self
+    }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // Yeni yer sorusu yalnızca panelde dursaydı kullanıcının menubar'a

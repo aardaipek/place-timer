@@ -1,101 +1,52 @@
 import PlaceTimerCore
 import SwiftUI
 
+/// Kayıtlı yerler.
+///
+/// Eskiden `NavigationSplitView`'dı. Tercih penceresi genişliğinde iki sütun
+/// demek, solda üç beş satırlık bir liste ve sağda çoğu zaman "Yer seçilmedi"
+/// yazan boş bir sütun demekti: pencerenin yarısı hiçbir şey göstermiyordu.
+/// Bir tercih sekmesinin içine tam bir gezinme yığını koymak ayrıca sekmenin
+/// kendi başlık çubuğuyla yarışan ikinci bir kabuk üretiyordu.
+///
+/// Tek sütun ve satır içinde açılan ayrıntı aynı işi boş alan bırakmadan
+/// yapar; seçili olmayan yerler de görünür kalır.
 struct PlacesSettingsView: View {
     @Bindable var coordinator: AppCoordinator
-    @State private var selection: UUID?
-    @State private var silinecek: Place?
-    @State private var draftName = ""
 
     var body: some View {
-        HSplitView {
-            List(coordinator.knownPlaces, selection: $selection) { place in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(place.displayName)
-                    Text("\(place.ssids.count) ağ")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .tag(place.id)
+        if coordinator.knownPlaces.isEmpty {
+            ContentUnavailableView {
+                Label("Kayıtlı yer yok", systemImage: "mappin.slash")
+            } description: {
+                Text(
+                    "Tanımadığı bir Wi-Fi ağına bağlandığında PlaceTimer burayı "
+                        + "sorar; verdiğin ad buraya düşer."
+                )
             }
-            .frame(minWidth: 180, maxHeight: .infinity)
-
-            detay
-                .frame(minWidth: 260, maxWidth: .infinity, maxHeight: .infinity)
-        }
-        // TabView icinde HSplitView kendi ideal yuksekligine buzusup pencerenin
-        // altina yapisiyor; dikeyde acikca genislemesini soylemek gerekiyor.
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .confirmationDialog(
-            "\(silinecek?.displayName ?? "") silinsin mi?",
-            isPresented: Binding(
-                get: { silinecek != nil },
-                set: { if !$0 { silinecek = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Sil", role: .destructive) {
-                if let silinecek { coordinator.removePlace(silinecek.id) }
-                selection = nil
-                silinecek = nil
-            }
-            Button("Vazgeç", role: .cancel) { silinecek = nil }
-        } message: {
-            Text("Bu yerde geçirdiğin süreler geçmişte \"Silinmiş yer\" olarak kalır.")
-        }
-    }
-
-    private func commitRename(_ place: Place) {
-        let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        coordinator.renamePlace(place.id, to: trimmed)
-    }
-
-    @ViewBuilder
-    private var detay: some View {
-        if let place = coordinator.knownPlaces.first(where: { $0.id == selection }) {
+        } else {
             Form {
-                Section("Ad") {
-                    // Her tus vurusunda kaydetmiyoruz: liste ada gore sirali,
-                    // yazarken satir gozunun onunde yer degistirirdi.
-                    TextField("Yerin adı", text: $draftName)
-                        .onSubmit { commitRename(place) }
-                    Button("Kaydet") { commitRename(place) }
-                        .disabled(draftName.trimmingCharacters(
-                            in: .whitespacesAndNewlines
-                        ).isEmpty)
-                }
-
-                Section("Ağlar") {
-                    if place.ssids.isEmpty {
-                        Text("Bu yere bağlı ağ kalmadı; artık kendiliğinden tanınmaz.")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                    }
-                    ForEach(place.ssids.sorted(), id: \.self) { ssid in
-                        HStack {
-                            Text(ssid).lineLimit(1)
-                            Spacer()
-                            Button("Ayır") {
-                                coordinator.detachSSID(ssid, from: place.id)
-                            }
-                            .buttonStyle(.borderless)
-                        }
-                    }
-                }
-
                 Section {
-                    Button("Yeri sil", role: .destructive) { silinecek = place }
+                    ForEach(coordinator.knownPlaces) { place in
+                        PlaceRowView(coordinator: coordinator, place: place)
+                    }
+                } header: {
+                    Text("Kayıtlı yerler")
+                } footer: {
+                    Text(
+                        "Bir yer birden çok ağ tutabilir: router'lar 2.4 ve 5 GHz "
+                            + "bantlarını çoğu zaman ayrı adlarla yayınlar."
+                    )
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .formStyle(.grouped)
-            .onChange(of: place.id, initial: true) { draftName = place.displayName }
-        } else {
-            ContentUnavailableView(
-                "Yer seçilmedi",
-                systemImage: "mappin.slash",
-                description: Text("Soldaki listeden bir yer seç.")
-            )
         }
     }
+}
+
+#Preview {
+    PlacesSettingsView(coordinator: AppCoordinator(directory: .temporaryDirectory))
+        .frame(width: Design.settingsPaneWidth, height: Design.settingsHeight)
 }
