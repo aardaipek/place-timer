@@ -38,11 +38,25 @@ public struct PlaceTimerScene: Scene {
 /// yeni yer sorusunu kendi pencerelerinde gösterir.
 @MainActor
 public final class PlaceTimerAppDelegate: NSObject, NSApplicationDelegate {
+    /// Panelin pencere açtırabilmesi için tek örneğe erişim.
+    ///
+    /// `NSApp.delegate` bu sınıfı **vermez**: SwiftUI,
+    /// `NSApplicationDelegateAdaptor` ile verilen nesneyi kendi
+    /// `SwiftUI.AppDelegate` sarmalayıcısının arkasına koyar ve mesajları ona
+    /// iletir. `NSApp.delegate as? PlaceTimerAppDelegate` bu yüzden sessizce
+    /// `nil` döner — ayarlar düğmesi tam olarak bu yüzden hiçbir şey yapmıyordu.
+    public private(set) static weak var shared: PlaceTimerAppDelegate?
+
     public let coordinator = AppCoordinator()
 
     private let onboardingWindow = AppWindow(title: "PlaceTimer")
     private let promptWindow = AppWindow(title: "Yeni yer")
     private let settingsWindow = AppWindow(title: "PlaceTimer Ayarları")
+
+    public override init() {
+        super.init()
+        Self.shared = self
+    }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // Yeni yer sorusu yalnızca panelde dursaydı kullanıcının menubar'a

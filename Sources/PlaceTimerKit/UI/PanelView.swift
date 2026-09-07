@@ -44,7 +44,7 @@ public struct PanelView: View {
             .help("Oturum kontrolleri")
 
             Button {
-                (NSApp.delegate as? PlaceTimerAppDelegate)?.presentSettings()
+                PlaceTimerAppDelegate.shared?.presentSettings()
             } label: {
                 Image(systemName: "gearshape")
             }
@@ -122,7 +122,7 @@ public struct PanelView: View {
         VStack(alignment: .leading, spacing: 8) {
             if coordinator.needsLocationPermission || coordinator.needsNotificationPermission {
                 Button {
-                    (NSApp.delegate as? PlaceTimerAppDelegate)?.presentOnboarding()
+                    PlaceTimerAppDelegate.shared?.presentOnboarding()
                 } label: {
                     Label(eksikIzin, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
