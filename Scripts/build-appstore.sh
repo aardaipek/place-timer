@@ -123,6 +123,15 @@ else
   SIGN_ENTITLEMENTS="$ENTITLEMENTS"
 fi
 
+# Genisletilmis oznitelikler temizleniyor. Provisioning profile tarayiciyla
+# indirildigi icin uzerinde com.apple.quarantine tasiyor ve bundle'a oyle
+# giriyordu; App Store Connect bunu reddediyor:
+#   "The package contains one or more files with the com.apple.quarantine
+#    extended file attribute ... embedded.provisionprofile" (91109)
+# Imzadan once yapiliyor: sonra yapilsaydi muhurlenmis kaynaklar bozulurdu.
+echo "==> Genisletilmis oznitelikler temizleniyor"
+xattr -cr "$BUNDLE"
+
 echo "==> Uygulama imzalaniyor: $APP_IDENTITY"
 codesign --force --timestamp --options runtime \
   --entitlements "$SIGN_ENTITLEMENTS" \
