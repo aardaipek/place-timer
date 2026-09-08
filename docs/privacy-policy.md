@@ -95,4 +95,4 @@ Bu politika değişirse bu sayfa güncellenir ve üstteki tarih değiştirilir.
 
 ## İletişim
 
-Sorularınız için: **[e-posta adresiniz]**
+Sorularınız için: **developer.ardaipek@gmail.com**
