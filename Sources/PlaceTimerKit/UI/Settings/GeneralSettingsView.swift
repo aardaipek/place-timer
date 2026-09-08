@@ -33,13 +33,7 @@ struct GeneralSettingsView: View {
             } header: {
                 Text("Oturum")
             } footer: {
-                Text(
-                    "Uyku eşiği oturumun ne zaman kapanacağını, hareketsizlik eşiği "
-                        + "aktif çalışma sayacının ne zaman duracağını belirler. "
-                        + "Eşikten kısa molalar — kahve almak, tuvalet — oturumu bozmaz."
-                )
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                sessionFooter
             }
 
             Section {
@@ -104,6 +98,29 @@ struct GeneralSettingsView: View {
             .glassEffect(in: .capsule)
         }
         .animation(.snappy, value: draft)
+    }
+
+    /// "Hemen" eşiği ötekilerden başka bir şey anlatıyor; açıklama da onunla
+    /// birlikte değişiyor. Sabit bir metin ya birini ya ötekini yanlış anlatırdı.
+    @ViewBuilder
+    private var sessionFooter: some View {
+        if draft.sessionResetSleepThreshold == 0 {
+            Text(
+                "Kapağı kapattığın an oturum biter; kapalı geçen süre hiçbir yere "
+                    + "yazılmaz. Hareketsizlik eşiği ise aktif çalışma sayacının ne "
+                    + "zaman duracağını belirler."
+            )
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        } else {
+            Text(
+                "Uyku eşiği oturumun ne zaman kapanacağını, hareketsizlik eşiği "
+                    + "aktif çalışma sayacının ne zaman duracağını belirler. "
+                    + "Eşikten kısa molalar — kahve almak, tuvalet — oturumu bozmaz."
+            )
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     @ViewBuilder

@@ -27,12 +27,17 @@ struct PanelHeaderView: View {
             Menu("Oturum kontrolleri", systemImage: "ellipsis") {
                 Button("Sayacı sıfırla", action: coordinator.endCurrentSession)
 
+                // Menü artık boş katalogda da açık: "Yeni yer…" her zaman
+                // duruyor. Eskiden kayıtlı yer yokken menü tamamen kapalıydı
+                // ve bilgisayarı henüz bir ağa bağlanmamışken açan kullanıcının
+                // yeri belirlemek için hiçbir yolu kalmıyordu.
                 Menu("Yeri değiştir") {
                     ForEach(coordinator.knownPlaces) { place in
                         Button(place.displayName) { changePlace(to: place) }
                     }
+                    if !coordinator.knownPlaces.isEmpty { Divider() }
+                    Button("Yeni yer…", action: newPlace)
                 }
-                .disabled(coordinator.knownPlaces.isEmpty)
 
                 Divider()
 
@@ -52,6 +57,10 @@ struct PanelHeaderView: View {
 
     private func changePlace(to place: Place) {
         coordinator.overrideCurrentPlace(place.id)
+    }
+
+    private func newPlace() {
+        PlaceTimerAppDelegate.shared?.presentNewPlace()
     }
 
     private func openSettings() {

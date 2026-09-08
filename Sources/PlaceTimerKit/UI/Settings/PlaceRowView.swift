@@ -12,6 +12,8 @@ struct PlaceRowView: View {
     @State private var draftName = ""
     @State private var isExpanded = false
     @State private var confirmingDelete = false
+    @State private var confirmingMerge = false
+    @State private var mergeTarget: Place?
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -89,12 +91,43 @@ struct PlaceRowView: View {
                 }
             }
 
+            if !digerYerler.isEmpty {
+                LabeledContent("Birleştir") {
+                    Menu("Başka bir yere taşı…") {
+                        ForEach(digerYerler) { hedef in
+                            Button(hedef.displayName) { askToMerge(into: hedef) }
+                        }
+                    }
+                    .fixedSize()
+                }
+            }
+
             HStack {
                 Spacer()
                 Button("Yeri sil", role: .destructive) { confirmingDelete = true }
             }
         }
         .padding(.top, Design.small)
+        .confirmationDialog(
+            "Yerler birleşsin mi?",
+            isPresented: $confirmingMerge,
+            titleVisibility: .visible,
+            presenting: mergeTarget
+        ) { hedef in
+            Button("Birleştir") { merge(into: hedef) }
+            Button("Vazgeç", role: .cancel) { mergeTarget = nil }
+        } message: { hedef in
+            Text(
+                "\(place.displayName) yeri \(hedef.displayName) içine taşınır: "
+                    + "ağları ve geçmişteki süreleri oraya geçer, "
+                    + "\(place.displayName) listeden kalkar."
+            )
+        }
+    }
+
+    /// Birleştirme hedefi olabilecek yerler: kendisi dışındaki her şey.
+    private var digerYerler: [Place] {
+        coordinator.knownPlaces.filter { $0.id != place.id }
     }
 
     private var agSayisi: String {
@@ -113,6 +146,16 @@ struct PlaceRowView: View {
             return
         }
         coordinator.renamePlace(place.id, to: temizAd)
+    }
+
+    private func askToMerge(into hedef: Place) {
+        mergeTarget = hedef
+        confirmingMerge = true
+    }
+
+    private func merge(into hedef: Place) {
+        coordinator.mergePlace(place.id, into: hedef.id)
+        mergeTarget = nil
     }
 
     private func detach(_ ssid: String) {

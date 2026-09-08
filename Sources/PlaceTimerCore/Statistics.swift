@@ -80,6 +80,25 @@ public func placeTotals(
         .sorted { $0.totalSeconds > $1.totalSeconds }
 }
 
+/// Aralığa düşen oturumlar, en yenisi başta.
+///
+/// Toplamlar "nerede ne kadar" sorusunu cevaplıyor; bu ise "hangi oturumlar"
+/// sorusunu. Yanlış açılmış bir oturumu silebilmek için önce onu görmek
+/// gerekiyor.
+public func sessionsIn(
+    _ range: StatsRange,
+    from sessions: [Session],
+    now: Date,
+    calendar: Calendar = .current
+) -> [Session] {
+    guard let interval = range.interval(containing: now, calendar: calendar) else {
+        return []
+    }
+    return sessions
+        .filter { interval.contains($0.startedAt) }
+        .sorted { $0.startedAt > $1.startedAt }
+}
+
 /// Gün şeridinin tek bir parçası.
 public struct DaySegment: Sendable, Equatable, Identifiable {
     public let placeID: UUID?

@@ -92,6 +92,17 @@ public struct SessionEngine: Sendable {
 
     // MARK: - Olay işleyicileri
 
+    /// İki yer birleştirildiğinde açık oturumun yer kimliğini taşır.
+    ///
+    /// `placeResolved` göndermek işe yaramaz: motor onu gerçek bir yer
+    /// değişimi sayıp oturumu kapatır. Oysa kullanıcı hiçbir yere gitmedi,
+    /// yalnızca iki kaydın aynı yer olduğunu söyledi.
+    public mutating func reassignPlace(from source: UUID, to target: UUID) {
+        guard source != target else { return }
+        if currentSession?.placeID == source { currentSession?.placeID = target }
+        if currentPlace == .known(source) { currentPlace = .known(target) }
+    }
+
     private mutating func handleWake(at now: Date) -> [SessionEffect] {
         isAsleep = false
         lastTickAt = nil

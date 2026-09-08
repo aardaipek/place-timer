@@ -88,6 +88,33 @@ public struct PlaceCatalog: Codable, Sendable, Equatable {
         places.removeAll { $0.id == placeID }
     }
 
+    /// İki yeri birleştirir: kaynağın ağları hedefe geçer, kaynak katalogdan
+    /// çıkar. Router'ın 2.4 ve 5 GHz bantları ayrı yer olarak kaydedildiğinde
+    /// ya da aynı mekân iki farklı adla tanındığında gereken şey bu.
+    ///
+    /// Hedefin adı ve koordinatı korunur — kullanıcı hangisinin kalacağını
+    /// hedefi seçerek söylüyor. Tek istisna, hedefin hiç koordinatı olmaması:
+    /// o zaman kaynağınki alınıyor, çünkü koordinat zincir şube ayrımının tek
+    /// dayanağı ve elde varken atmanın anlamı yok.
+    ///
+    /// Geçmişteki oturumların yer kimliği burada değişmez; onu
+    /// `SessionHistory.reassign` yapıyor. Katalog oturumları tanımıyor.
+    public mutating func merge(_ source: UUID, into target: UUID) {
+        guard source != target,
+            let sourceIndex = places.firstIndex(where: { $0.id == source }),
+            let targetIndex = places.firstIndex(where: { $0.id == target })
+        else { return }
+
+        let moved = places[sourceIndex]
+        places[targetIndex].ssids.formUnion(moved.ssids)
+        places[targetIndex].bssids.formUnion(moved.bssids)
+        if places[targetIndex].coordinate == nil {
+            places[targetIndex].latitude = moved.latitude
+            places[targetIndex].longitude = moved.longitude
+        }
+        places.remove(at: sourceIndex)
+    }
+
     /// Bir ağı yerden ayırır. Yerin son SSID'si olsa bile yer silinmez —
     /// silmek ile ayırmak farklı işlemlerdir; kullanıcı hangisini istediğini
     /// kendisi söyler.

@@ -229,7 +229,7 @@ public final class AppCoordinator {
                 persistState(at: Date())
             case .sessionEnded(let session):
                 history.append(session)
-                try? historyStore.save(history)
+                persistHistory()
             case .markReached(_, let elapsed, let placeID):
                 notifier.notifyMark(
                     elapsed: elapsed,
@@ -288,6 +288,39 @@ public final class AppCoordinator {
         self.prompt = nil
         apply(.placeResolved(.known(placeID)))
         refreshDisplay()
+    }
+
+    /// Panelden elle yer oluşturur ve oraya geçer.
+    ///
+    /// Otomatik akışta yer ancak tanınmayan bir ağ görülünce doğuyordu.
+    /// Bilgisayar açıldığında henüz hiçbir ağa bağlanmamışsa ya da yanlış bir
+    /// ağa bağlanıp o ağ zaten tanınıyorsa kullanıcının elinde hiçbir yol
+    /// kalmıyordu: sayaç işliyor ama yeri değiştiremiyordu.
+    ///
+    /// O anki ağ yeni yere ancak hiçbir yere ait değilse ekleniyor. Aynı SSID
+    /// iki yere birden yazılsaydı katalog eşleşmesi hangisini seçeceğini
+    /// bilemezdi; o durumda seçim manuel düzeltme olarak, yani ağ değişene
+    /// kadar geçerli kalıyor.
+    public func createPlaceManually(named name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let freeSSID = lastWiFi?.ssid.flatMap { candidate in
+            catalog.places.contains { $0.ssids.contains(candidate) } ? nil : candidate
+        }
+
+        let place = Place(
+            ssids: freeSSID.map { [$0] } ?? [],
+            bssids: freeSSID == nil ? [] : (lastWiFi?.bssid.map { [$0] } ?? []),
+            displayName: trimmed,
+            latitude: location.coordinate?.latitude,
+            longitude: location.coordinate?.longitude,
+            createdAt: Date()
+        )
+        catalog.add(place)
+        if let freeSSID { skippedSSIDs.remove(freeSSID) }
+        persistCatalog()
+        overrideCurrentPlace(place.id)
     }
 
     public func skipPrompt() {
@@ -360,6 +393,76 @@ public final class AppCoordinator {
         refreshDisplay()
     }
 
+    /// İki yeri birleştirir: kaynağın ağları, geçmişi ve varsa açık oturumu
+    /// hedefe geçer, kaynak katalogdan çıkar.
+    ///
+    /// Katalogdan silmek tek başına yetmezdi: oturumlar hâlâ eski kimliği
+    /// tutar ve istatistikte "Silinmiş yer" diye ayrı bir satır olarak
+    /// durmaya devam ederdi.
+    public func mergePlace(_ source: UUID, into target: UUID) {
+        guard source != target,
+            catalog.place(id: source) != nil,
+            catalog.place(id: target) != nil
+        else { return }
+
+        catalog.merge(source, into: target)
+        history = SessionHistory.reassign(history, from: source, to: target)
+        engine.reassignPlace(from: source, to: target)
+        if let selection = manualSelection, selection.placeID == source {
+            manualSelection = ManualPlaceSelection(placeID: target, ssid: selection.ssid)
+        }
+
+        persistCatalog()
+        persistHistory()
+        persistState(at: Date())
+        refreshDisplay()
+    }
+
+    // MARK: - Oturum düzeltmeleri
+
+    /// Aralığa düşen oturumlar, en yenisi başta; açık oturum da dahil.
+    public func sessions(for range: StatsRange) -> [Session] {
+        sessionsIn(range, from: allSessions, now: Date())
+    }
+
+    /// Süren oturum; listede silinemez olarak işaretlenir.
+    public var currentSessionID: UUID? { engine.currentSession?.id }
+
+    /// Yanlış açılmış bir oturumu siler.
+    ///
+    /// Açık oturum silinmiyor: bir sayacı kendi altından çekmek yerine
+    /// paneldeki "Sayacı sıfırla" onu kapatıp yenisini açar, kapanan oturum da
+    /// listeye düşüp buradan silinebilir.
+    public func deleteSession(_ sessionID: UUID) {
+        guard engine.currentSession?.id != sessionID else { return }
+        history = SessionHistory.remove(sessionID, from: history)
+        persistHistory()
+        refreshDisplay()
+    }
+
+    // MARK: - Gizlilik
+
+    /// Kayıtlı yerleri ve bütün oturum geçmişini siler; sayaç sıfırdan başlar.
+    ///
+    /// Tercihler kalıyor: onlar kullanıcının nerede olduğunu değil, uygulamayı
+    /// nasıl istediğini anlatıyor. Arayüz de bunu böyle söylüyor.
+    public func eraseAllData() {
+        catalog = PlaceCatalog()
+        history = []
+        manualSelection = nil
+        skippedSSIDs = []
+        prompt = nil
+        engine = SessionEngine(
+            configuration: EngineConfiguration(preferences: preferences)
+        )
+        apply(.wake)
+
+        persistCatalog()
+        persistHistory()
+        persistState(at: Date())
+        refreshDisplay()
+    }
+
     // MARK: - İstatistik
 
     public func totals(for range: StatsRange) -> [PlaceTotal] {
@@ -376,6 +479,10 @@ public final class AppCoordinator {
 
     private func persistCatalog() {
         try? catalogStore.save(catalog)
+    }
+
+    private func persistHistory() {
+        try? historyStore.save(history)
     }
 
     private func persistState(at now: Date) {

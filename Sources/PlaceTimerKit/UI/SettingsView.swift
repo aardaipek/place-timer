@@ -43,6 +43,7 @@ public struct SettingsView: View {
         case .yerler: PlacesSettingsView(coordinator: coordinator)
         case .izinler: PermissionsSettingsView(coordinator: coordinator)
         case .istatistik: StatisticsSettingsView(coordinator: coordinator)
+        case .hakkinda: AboutSettingsView(coordinator: coordinator)
         }
     }
 }

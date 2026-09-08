@@ -16,16 +16,20 @@ Gereksinim: **macOS 26+** (Liquid Glass arayuz).
 - **Yer kimligi** bagli olunan SSID kumesidir. Router'lar 2.4 ve 5 GHz
   bantlarini ayri adlarla yayinladigi icin bir yer birden cok SSID tutabilir.
   Ayni SSID kayitli koordinattan 300 m'den uzaktaysa zincir sube olarak sorulur.
-- **Oturum**, 60 dakikayi asan uykuda ya da yer degistiginde kapanir. Kisa
-  molalar (kahve almak, tuvalet) oturumu bozmaz.
+- **Oturum**, uyku esigini asan uykuda ya da yer degistiginde kapanir. Esik
+  ayarlanabilir: "Hemen" secilirse kapak kapandigi an oturum biter, daha uzun
+  bir esikte kisa molalar (kahve almak, tuvalet) oturumu bozmaz.
 - **Iki sayac** paralel isler: menubar'daki *yerde gecen sure* duvar saatidir;
   panel ayrica *aktif calisma suresini* gosterir (ekran acik ve son girdiden
   bu yana esik suresinden az gecmisse sayar).
 - **Gun seridi** gunun ilk oturumundan simdiye uzanir, yerlere gore renklidir.
   Oturumlar arasi bosluklar bos gorunur.
-- **Manuel kontrol**: otomasyon yanilirsa panelden sayaci sifirlayabilir ya da
-  yeri elle degistirebilirsin. Manuel secim, o anki agda kalindigi surece
+- **Manuel kontrol**: otomasyon yanilirsa panelden sayaci sifirlayabilir, yeri
+  elle degistirebilir ya da yeni bir yer olusturabilirsin. Bilgisayar henuz bir
+  aga baglanmamisken de calisir. Manuel secim, o anki agda kalindigi surece
   otomatik eslesmeyi bastirir.
+- **Duzeltme**: iki kayit ayni yerse birlestirilebilir (aglari ve gecmisteki
+  sureleri hedefe gecer); yanlis acilmis bir oturum tek tek silinebilir.
 
 ## Ayarlar
 
@@ -35,9 +39,10 @@ solundaki kenar cubugunda dort bolum var:
 | Bolum | Icerik |
 |---|---|
 | Genel | Saniye gosterimi, menubar'da yer adi, esikler, bildirim sikligi, acilista baslat |
-| Yerler | Kayitli yerler: ad degistir, SSID ayir, sil |
+| Yerler | Kayitli yerler: ad degistir, SSID ayir, baska yerle birlestir, sil |
 | Izinler | Konum / bildirim / giris ogesi durumu ve duzeltme |
-| Istatistik | Bu hafta / bu ay, yer basina toplam |
+| Istatistik | Bugun / bu hafta / bu ay: yer basina toplam ve o araliktaki oturumlar; yanlis oturum silinebilir |
+| Hakkinda | Surum, gizlilik, verilerin yeri, tum verileri sil |
 
 Tasarim dokumanlari:
 [v1](docs/superpowers/specs/2026-09-04-place-timer-design.md) ·

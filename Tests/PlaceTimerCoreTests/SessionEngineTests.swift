@@ -62,6 +62,28 @@ struct SessionEngineTests {
         #expect(engine.elapsed(at: at(75)) == 75 * 60)
     }
 
+    /// "Kapağı kapattığım an dursun" ayarı: eşik sıfırken her uyku oturumu
+    /// kapatır ve oturum uyanışta değil, uykuya dalınan anda biter — kapalı
+    /// geçen süre hiçbir yere yazılmaz.
+    @Test("Uyku eşiği sıfırken oturum kapağın kapandığı anda biter")
+    func zeroSleepThresholdEndsSessionAtSleep() {
+        var engine = SessionEngine(
+            configuration: EngineConfiguration(sessionResetSleepThreshold: 0)
+        )
+        engine.handle(.wake, at: at(0))
+        engine.handle(.placeResolved(.known(ev)), at: at(0))
+        let ilk = engine.currentSession?.id
+
+        engine.handle(.sleep, at: at(30))
+        engine.handle(.wake, at: at(90))
+
+        let yeni = engine.currentSession
+        #expect(yeni?.id != ilk)
+        // Yeni oturum uyanış anında basliyor; 60 dakikalik kapali sure disarida.
+        #expect(yeni?.startedAt == at(90))
+        #expect(engine.elapsed(at: at(90)) == 0)
+    }
+
     @Test("90 dakikalık uyku oturumu kapatır, yenisini açar")
     func longSleepResetsSession() {
         var engine = SessionEngine()

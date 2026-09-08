@@ -13,7 +13,13 @@ struct ThresholdOption: Identifiable, Hashable {
 
     var id: TimeInterval { seconds }
 
+    /// "Hemen" gercek bir secenek: esik sifirken her uyku oturumu kapatir ve
+    /// oturum uyanista degil, uykuya dalinan anda biter. Kapagi kapatinca
+    /// sayacin durmasini isteyen kullanicinin istedigi tam olarak bu.
     static let sleep: [ThresholdOption] = [
+        ThresholdOption(title: "Hemen", seconds: 0),
+        ThresholdOption(title: "5 dakika", seconds: 5 * 60),
+        ThresholdOption(title: "15 dakika", seconds: 15 * 60),
         ThresholdOption(title: "30 dakika", seconds: 30 * 60),
         ThresholdOption(title: "1 saat", seconds: 60 * 60),
         ThresholdOption(title: "2 saat", seconds: 2 * 60 * 60),

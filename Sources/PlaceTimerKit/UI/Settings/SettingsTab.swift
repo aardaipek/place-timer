@@ -7,7 +7,7 @@ import Foundation
 /// duruyor; kenar çubuğu ile pencere başlığının aynı adı söylemesinin tek yolu
 /// ikisinin de aynı yerden okuması.
 enum SettingsTab: Hashable, CaseIterable, Identifiable {
-    case genel, yerler, izinler, istatistik
+    case genel, yerler, izinler, istatistik, hakkinda
 
     var id: Self { self }
 
@@ -17,6 +17,7 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
         case .yerler: "Yerler"
         case .izinler: "İzinler"
         case .istatistik: "İstatistik"
+        case .hakkinda: "Hakkında"
         }
     }
 
@@ -26,6 +27,7 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
         case .yerler: "mappin.and.ellipse"
         case .izinler: "lock.shield"
         case .istatistik: "chart.bar"
+        case .hakkinda: "info.circle"
         }
     }
 }
