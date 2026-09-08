@@ -42,6 +42,29 @@ Eski konumdaki veri tasinmiyor; uygulama sifirdan basliyor.
 
 ## Yapilmasi gerekenler
 
+### 0. Yayinlanmis Xcode (ONCE BU)
+
+Makinede su an yalnizca **Xcode 27.0 beta** var ve icinde yalnizca macOS 27
+SDK'si bulunuyor:
+
+```
+/Applications/Xcode-beta.app        -> 27.0
+Platforms/MacOSX.platform/.../SDKs/ -> MacOSX27.0.sdk, MacOSX27.sdk
+```
+
+App Store beta SDK ile derlenmis paketleri **kabul etmiyor**; yukleme
+isleniyorken reddedilir. Mac App Store'dan yayinlanmis Xcode 26 kurulmali ve
+magaza derlemesi onunla yapilmali:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  PROFILE=~/Downloads/PlaceTimer.provisionprofile Scripts/build-appstore.sh
+```
+
+Paket `swift-tools-version: 6.2` ve `.macOS(.v26)` istiyor; yayinlanmis
+Xcode 26 ikisini de karsiliyor. Gunluk gelistirme beta ile surdurulebilir,
+yalnizca magazaya giden derleme yayinlanmis Xcode ile yapilmali.
+
 ### 1. Apple Developer hesabi
 
 - Apple Developer Program uyeligi (yillik).
@@ -85,6 +108,7 @@ notarizasyon icindir — Developer ID ile dagitim yapilmadigi surece gerekmez.)
 
 ## Gonderim oncesi son gozden gecirme
 
+- [ ] Paket yayinlanmis Xcode ile mi derlendi? (beta SDK reddedilir)
 - [ ] `CFBundleShortVersionString` ve `CFBundleVersion` dogru mu?
       (`Resources/Info.plist`)
 - [ ] Bildirim izni ve acilista baslatma sandbox'li derlemede elle denendi mi?
