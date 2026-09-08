@@ -84,9 +84,48 @@ else
   echo "       PROFILE=/yol/PlaceTimer.provisionprofile ile tekrar calistirin." >&2
 fi
 
+# Magaza imzasi iki entitlement daha istiyor: application-identifier ve
+# team-identifier. Xcode bunlari imzalarken kendisi ekliyor; codesign elle
+# cagrildiginda eklemiyor ve App Store Connect "signature ... is missing an
+# application identifier" (90886) uyarisi verip build'i TestFlight'a
+# kapatiyor.
+#
+# Degerler profilden okunuyor, betige gomulmuyor: takim ya da paket kimligi
+# degistiginde profil zaten degisecek, imza da kendiliginden ona uyacak.
+# Yerel derleme (build-app.sh) bu iki anahtari almiyor — orada imza baska bir
+# takimin gelistirme sertifikasiyla atiliyor ve uyusmayan bir
+# application-identifier uygulamanin hic acilmamasina yol acardi.
+GENERATED_ENTITLEMENTS="build/appstore/PlaceTimer.generated.entitlements"
+PROFILE_PLIST="build/appstore/profile.plist"
+
+if [[ -n "$PROFILE" ]]; then
+  security cms -D -i "$PROFILE" > "$PROFILE_PLIST"
+  APP_ID="$(/usr/libexec/PlistBuddy -c \
+    "Print :Entitlements:com.apple.application-identifier" "$PROFILE_PLIST")"
+  TEAM_ID="$(/usr/libexec/PlistBuddy -c \
+    "Print :Entitlements:com.apple.developer.team-identifier" "$PROFILE_PLIST")"
+
+  if [[ -z "$APP_ID" || -z "$TEAM_ID" ]]; then
+    echo "hata: profilden kimlikler okunamadi." >&2
+    exit 1
+  fi
+
+  echo "==> Imza kimlikleri profilden: $APP_ID"
+  cp "$ENTITLEMENTS" "$GENERATED_ENTITLEMENTS"
+  /usr/libexec/PlistBuddy -c \
+    "Add :com.apple.application-identifier string $APP_ID" \
+    "$GENERATED_ENTITLEMENTS" >/dev/null
+  /usr/libexec/PlistBuddy -c \
+    "Add :com.apple.developer.team-identifier string $TEAM_ID" \
+    "$GENERATED_ENTITLEMENTS" >/dev/null
+  SIGN_ENTITLEMENTS="$GENERATED_ENTITLEMENTS"
+else
+  SIGN_ENTITLEMENTS="$ENTITLEMENTS"
+fi
+
 echo "==> Uygulama imzalaniyor: $APP_IDENTITY"
 codesign --force --timestamp --options runtime \
-  --entitlements "$ENTITLEMENTS" \
+  --entitlements "$SIGN_ENTITLEMENTS" \
   --sign "$APP_IDENTITY" "$BUNDLE"
 codesign --verify --strict --verbose=2 "$BUNDLE"
 
