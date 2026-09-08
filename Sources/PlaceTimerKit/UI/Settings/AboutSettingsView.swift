@@ -39,9 +39,10 @@ struct AboutSettingsView: View {
             Section {
                 Label {
                     Text(
-                        "Bütün veriler yalnızca bu bilgisayarda, düz JSON dosyaları "
-                            + "olarak duruyor. Hiçbir sunucuya bir şey gönderilmez, "
-                            + "hesap açman gerekmez, uygulamada analitik yoktur."
+                        "Kayıtlı yerlerin ve bütün oturum geçmişin yalnızca bu "
+                            + "bilgisayarda, düz JSON dosyaları olarak duruyor. "
+                            + "Hesap açman gerekmez; uygulamanın sunucusu yoktur, "
+                            + "analitik toplamaz."
                     )
                     .fixedSize(horizontal: false, vertical: true)
                 } icon: {
@@ -51,15 +52,28 @@ struct AboutSettingsView: View {
 
                 Label {
                     Text(
-                        "Konum izni yalnızca Wi-Fi ağının adını okumak için: "
+                        "Konum izni Wi-Fi ağının adını okumak için gerekiyor: "
                             + "macOS 14'ten beri ağ adı bu izin olmadan verilmiyor. "
-                            + "Koordinat da yalnızca aynı adlı ağları birbirinden "
-                            + "ayırmak için saklanıyor."
+                            + "Koordinat da aynı adlı ağları birbirinden ayırmak için "
+                            + "saklanıyor."
                     )
                     .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: "location.fill")
                         .foregroundStyle(.blue)
+                }
+
+                Label {
+                    Text(
+                        "Tek istisna: tanımadığı bir ağa bağlandığında, ad önerecek "
+                            + "mekânları bulmak için o anki koordinat Apple Haritalar'a "
+                            + "gönderilir. Bu arama Apple'a gider, bize değil; "
+                            + "istemiyorsan sorulan yeri elle adlandırman yeter."
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "map")
+                        .foregroundStyle(.orange)
                 }
 
                 LabeledContent("Verilerin yeri") {

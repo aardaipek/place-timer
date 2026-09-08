@@ -8,12 +8,19 @@
   <key>CFBundleName</key><string>PlaceTimer</string>
   <key>CFBundleDisplayName</key><string>PlaceTimer</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleShortVersionString</key><string>1.0.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>26.0</string>
   <!-- Dock'ta ikon yok; uygulama yalnizca menubar'da yasar. -->
   <key>LSUIElement</key><true/>
-  <key>NSHumanReadableCopyright</key><string>Arda Ipek</string>
+  <!-- App Store zorunlu alani; uygulama menubar verimlilik araci. -->
+  <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+  <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Arda İpek</string>
+  <!--
+    Uygulama sifreleme kullanmiyor. Bu anahtar olmadan her yuklemede App Store
+    Connect ihracat uyumlulugu sorusunu tekrar soruyor.
+  -->
+  <key>ITSAppUsesNonExemptEncryption</key><false/>
   <key>NSLocationWhenInUseUsageDescription</key>
   <string>Bulundugun yeri Wi-Fi agindan taniyabilmek ve yakindaki mekan ismini onerebilmek icin konum izni gerekiyor. macOS, ag adini yalnizca bu izinle veriyor.</string>
 </dict>

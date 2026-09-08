@@ -87,10 +87,25 @@ else
   echo "uyari: Resources/AppIcon.icns yok; once Scripts/make-icon.sh calistirin." >&2
 fi
 
+# Sandbox entitlement'lari yerel derlemeye de uygulaniyor. App Store sandbox'i
+# zorunlu kiliyor; yerelde sandbox'siz calisip magazaya sandbox'li gondermek,
+# kirilan seyi ilk kez inceleme kuyrugunda gormek demek olurdu.
+ENTITLEMENTS="Resources/PlaceTimer.entitlements"
+
 echo "==> Imzalaniyor: $IDENTITY"
 codesign --force --options runtime --timestamp=none \
+  --entitlements "$ENTITLEMENTS" \
   --sign "$IDENTITY" "$BUNDLE"
 codesign --verify --strict "$BUNDLE"
+
+# Sandbox gercekten acildi mi? Entitlement dosyasi yanlis yolda olsaydi
+# codesign sessizce imzalar, uygulama da sandbox'siz calisirdi.
+if ! codesign -d --entitlements - --xml "$BUNDLE" 2>/dev/null \
+    | plutil -convert xml1 -o - - 2>/dev/null \
+    | grep -q "com.apple.security.app-sandbox"; then
+  echo "hata: sandbox entitlement'i imzaya girmedi." >&2
+  exit 1
+fi
 
 echo "==> Hazir: $BUNDLE"
 

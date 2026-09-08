@@ -44,6 +44,8 @@ solundaki kenar cubugunda dort bolum var:
 | Istatistik | Bugun / bu hafta / bu ay: yer basina toplam ve o araliktaki oturumlar; yanlis oturum silinebilir |
 | Hakkinda | Surum, gizlilik, verilerin yeri, tum verileri sil |
 
+Mac App Store'a gonderim: [docs/app-store.md](docs/app-store.md)
+
 Tasarim dokumanlari:
 [v1](docs/superpowers/specs/2026-09-04-place-timer-design.md) ·
 [v2](docs/superpowers/specs/2026-09-05-place-timer-v2-design.md)
@@ -57,9 +59,13 @@ Ikisi de zorunludur:
   icin kullanilir.
 - **Bildirimler** — saat basi uyarilar icin.
 
-Konum verisi cihazdan disari cikmaz; hicbir sunucuya bir sey gonderilmez.
-Tum veri `~/Library/Application Support/PlaceTimer/` altinda duz JSON olarak
-tutulur.
+Kayitli yerler ve oturum gecmisi cihazdan disari cikmaz; uygulamanin sunucusu
+yoktur, analitik toplamaz. Tum veri `~/Library/Application Support/PlaceTimer/`
+altinda duz JSON olarak tutulur.
+
+Tek istisna: taninmayan bir aga baglanildiginda ad onerebilmek icin o anki
+koordinat Apple Haritalar'a (`MKLocalSearch`) gonderilir. Bu arama Apple'a
+gider; sorulan yeri elle adlandirmak bu istegi tamamen atlar.
 
 ## Kurulum
 
