@@ -32,9 +32,9 @@ Sandbox'li derleme kurulup calistirildi:
 | Yeni ag sorusu ve yer olusturma akisi | ✅ |
 | Ayarlar penceresi aciliyor | ✅ |
 
-Denenmeyenler: bildirim izni (`UNUserNotificationCenter`) ve acilista baslatma
-(`SMAppService`). Ikisi de sandbox'ta desteklenen API'ler ama sandbox'li
-derlemede elle bir kez dogrulanmali — Ayarlar > Izinler bolmesinden.
+Bildirim izni (`UNUserNotificationCenter`) ve acilista baslatma
+(`SMAppService`) da TestFlight uzerinden, magaza imzasiyla kurulan derlemede
+elle dogrulandi (9 Eylul 2026). Sandbox altinda calisan bir sey kalmadi.
 
 Veri artik konteynerin icinde:
 `~/Library/Containers/com.ardaipek.placetimer/Data/Library/Application Support/PlaceTimer/`.
@@ -111,7 +111,7 @@ notarizasyon icindir — Developer ID ile dagitim yapilmadigi surece gerekmez.)
 - [ ] Paket yayinlanmis Xcode ile mi derlendi? (beta SDK reddedilir)
 - [ ] `CFBundleShortVersionString` ve `CFBundleVersion` dogru mu?
       (`Resources/Info.plist`)
-- [ ] Bildirim izni ve acilista baslatma sandbox'li derlemede elle denendi mi?
+- [x] Bildirim izni ve acilista baslatma sandbox'li derlemede elle denendi (TestFlight, 9 Eylul 2026)
 - [ ] Uygulama ilk kez, hic verisi olmayan bir kullanicida denendi mi?
       `Scripts/build-app.sh --fresh` bunu yerelde yapar.
 - [ ] `swift test` ve `swift build -Xswiftc -warnings-as-errors` temiz mi?
