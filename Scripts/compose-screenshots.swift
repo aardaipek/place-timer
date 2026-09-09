@@ -8,16 +8,16 @@ let canvasH = 900.0
 // Pencere goruntusu retina yakalandi (2x); tuvale sigacak sekilde kuculuyor.
 let targetWindowH = 700.0
 
-// Girdi: `screencapture -l<pencere-id>` ile yakalanmis pencere goruntuleri.
-// Cikti: docs/asc/media/tr/APP_DESKTOP/ altinda App Store olculerinde kareler.
-let tmp = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : ".")
+let tmp = URL(fileURLWithPath: "/Users/ardaipek/.claude/jobs/d0f969f3/tmp")
 let outDir = tmp.appendingPathComponent("media/tr/APP_DESKTOP")
 try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
-let sources = [
-    ("genel.png", "01_genel.png"),
-    ("istatistik.png", "02_istatistik.png"),
-    ("hakkinda.png", "03_hakkinda.png"),
+// (girdi, cikti, tuvaldeki yukseklik)
+let sources: [(String, String, Double)] = [
+    ("menubar.png", "01_menubar.png", 640),
+    ("genel.png", "02_genel.png", 700),
+    ("istatistik.png", "03_istatistik.png", 700),
+    ("hakkinda.png", "04_hakkinda.png", 700),
 ]
 
 func loadImage(_ url: URL) -> CGImage? {
@@ -25,7 +25,7 @@ func loadImage(_ url: URL) -> CGImage? {
     return CGImageSourceCreateImageAtIndex(src, 0, nil)
 }
 
-for (input, output) in sources {
+for (input, output, targetH) in sources {
     let inURL = tmp.appendingPathComponent(input)
     guard let window = loadImage(inURL) else {
         print("atlandi (okunamadi): \(input)")
@@ -57,9 +57,9 @@ for (input, output) in sources {
         )
     }
 
-    let scale = targetWindowH / Double(window.height)
+    let scale = targetH / Double(window.height)
     let w = Double(window.width) * scale
-    let h = targetWindowH
+    let h = targetH
     let rect = CGRect(x: (canvasW - w) / 2, y: (canvasH - h) / 2, width: w, height: h)
 
     ctx.setShadow(
