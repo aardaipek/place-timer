@@ -70,7 +70,6 @@ gider; sorulan yeri elle adlandirmak bu istegi tamamen atlar.
 ## Kurulum
 
 ```bash
-Scripts/make-icon.sh               # simgeyi uretir (bir kez yeterli)
 Scripts/build-app.sh --install     # derler, imzalar, /Applications'a kurar
 open /Applications/PlaceTimer.app
 ```
@@ -86,6 +85,10 @@ Scripts/build-app.sh --fresh
 
 Uygulamayi kaldirmak icin `/Applications/PlaceTimer.app` silinir; veri
 `~/Library/Application Support/PlaceTimer/` altinda kalir.
+
+Simge `Resources/AppIcon.icon` belgesinden her derlemede yeniden uretilir;
+duzenlemek icin dosyayi Icon Composer ile acin. Katmanlarin SVG kaynaklari
+`Resources/IconComposer/` altindadir.
 
 Betik uygulamayi derler, `.app` paketini kurar ve makinedeki gelistirici
 sertifikasiyla imzalar. Izinler imzali bir bundle gerektirdigi icin imza adimi

@@ -18,7 +18,19 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode-beta.app/Contents/Developer}"
+# Kurulu Xcode aranir: once beta, sonra kararli surum, en son xcode-select
+# ayari. Sabit bir yol yazilmiyor; beta kaldirildiginda betik sessizce yanlis
+# arac zincirine dusmesin diye.
+if [[ -z "${DEVELOPER_DIR:-}" ]]; then
+  for candidate in /Applications/Xcode-beta.app/Contents/Developer \
+                   /Applications/Xcode.app/Contents/Developer; do
+    if [[ -d "$candidate" ]]; then
+      DEVELOPER_DIR="$candidate"
+      break
+    fi
+  done
+fi
+DEVELOPER_DIR="${DEVELOPER_DIR:-$(xcode-select -p)}"
 export DEVELOPER_DIR
 
 APP_NAME="PlaceTimer"
@@ -65,10 +77,21 @@ cp "$(swift build -c "$CONFIGURATION" --show-bin-path)/PlaceTimerApp" \
    "$BUNDLE/Contents/MacOS/${APP_NAME}"
 cp Resources/Info.plist "$BUNDLE/Contents/Info.plist"
 
-if [[ -f Resources/AppIcon.icns ]]; then
-  cp Resources/AppIcon.icns "$BUNDLE/Contents/Resources/AppIcon.icns"
+# Simge, Icon Composer belgesinden derleniyor. actool tek gecisde iki cikti
+# birden verir: Assets.car (macOS 26'nin cam efekti ile koyu ve tonlu
+# varyantlari buradan okunur) ve geriye donuk AppIcon.icns. Info.plist'teki
+# CFBundleIconName ilkini, CFBundleIconFile ikincisini isaret eder.
+ICON="Resources/AppIcon.icon"
+if [[ -d "$ICON" ]]; then
+  echo "==> Simge derleniyor: $ICON"
+  xcrun actool "$ICON" \
+    --compile "$BUNDLE/Contents/Resources" \
+    --app-icon AppIcon \
+    --output-partial-info-plist "build/appstore/icon-partial.plist" \
+    --platform macosx \
+    --minimum-deployment-target 26.0 > /dev/null
 else
-  echo "hata: Resources/AppIcon.icns yok; once Scripts/make-icon.sh calistirin." >&2
+  echo "hata: $ICON yok." >&2
   exit 1
 fi
 

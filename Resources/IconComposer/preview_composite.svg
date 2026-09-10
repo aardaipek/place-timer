@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- PlaceTimer Icon Composer: Tüm Katmanların Önizlemesi -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6B40B8"/>
+      <stop offset="100%" stop-color="#1C2973"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Arka Plan Squircle (macOS standart oranları) -->
+  <rect x="61.44" y="61.44" width="901.12" height="901.12" rx="201.58" ry="201.58" fill="url(#bgGradient)"/>
+
+  <!-- Katman 1: Beyaz İğne -->
+  <path d="M 361.2379 611.0232 A 235.52 235.52 0 1 1 662.7621 611.0232 L 512 890.88 Z" fill="#FFFFFF"/>
+
+  <!-- Katman 2: Koyu Kadran Dairesi -->
+  <circle cx="512" cy="430.08" r="146.0224" fill="#17215C"/>
+
+  <!-- Katman 3: Akrep ve Yelkovan -->
+  <path d="M 500.7360 430.0800 L 500.7360 324.9439 A 11.264 11.264 0 0 1 523.2640 324.9439 L 523.2640 414.2612 L 584.2471 393.1516 A 11.264 11.264 0 0 1 591.6162 414.4403 L 515.6846 440.7243 A 11.264 11.264 0 0 1 500.7360 430.0800 Z" fill="#FFFFFF"/>
+</svg>

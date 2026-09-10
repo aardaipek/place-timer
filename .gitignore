@@ -6,4 +6,3 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 .codesign-identity
-Resources/AppIcon.icns

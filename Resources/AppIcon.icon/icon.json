@@ -1,0 +1,81 @@
+{
+  "fill" : {
+    "solid" : "extended-gray:1.00000,1.00000"
+  },
+  "groups" : [
+    {
+      "blur-material" : null,
+      "layers" : [
+        {
+          "hidden" : false,
+          "image-name" : "03_hands.svg",
+          "name" : "03_hands",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              -0.001567876731655815,
+              -11.267054234069974
+            ]
+          }
+        },
+        {
+          "hidden" : true,
+          "image-name" : "03_hands_stroke.svg",
+          "name" : "03_hands_stroke"
+        },
+        {
+          "blend-mode" : "normal",
+          "fill" : {
+            "solid" : "extended-gray:0.00000,1.00000"
+          },
+          "hidden" : false,
+          "image-name" : "02_dial.svg",
+          "name" : "02_dial",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              -27.56652287456791
+            ]
+          }
+        },
+        {
+          "blend-mode" : "normal",
+          "fill" : {
+            "solid" : "extended-gray:0.75000,1.00000"
+          },
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "01_pin.svg",
+          "name" : "01_pin",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              -30.717017449145033
+            ]
+          }
+        },
+        {
+          "hidden" : true,
+          "image-name" : "01_pin_parts.svg",
+          "name" : "01_pin_parts"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
