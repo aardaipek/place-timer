@@ -44,6 +44,7 @@ public final class AppCoordinator {
     public private(set) var todaySegments: [DaySegment] = []
     public private(set) var todayHereSeconds: TimeInterval = 0
     public private(set) var canUndo = false
+    public private(set) var suggestions: [Suggestion] = []
     public private(set) var todayTotalSeconds: TimeInterval = 0
     /// Bugün kaç farklı yerde bulunuldu; tek yerse panel "Bugün burada"yı
     /// "Bugün toplam"ın tekrarı olarak göstermez.
@@ -66,6 +67,8 @@ public final class AppCoordinator {
     private let historyStore: JSONFileStore<[Session]>
     private let stateStore: JSONFileStore<AppState>
     private let preferencesStore: JSONFileStore<Preferences>
+    private let suggestionStore: JSONFileStore<SuggestionState>
+    private var suggestionState = SuggestionState()
 
     private var ticker: Timer?
     private var ticksSinceNetworkCheck = 0
@@ -95,6 +98,7 @@ public final class AppCoordinator {
         preferencesStore = JSONFileStore(
             url: base.appendingPathComponent("preferences.json")
         )
+        suggestionStore = JSONFileStore(url: base.appendingPathComponent("suggestions.json"))
     }
 
     // MARK: - Yaşam döngüsü
@@ -102,6 +106,7 @@ public final class AppCoordinator {
     public func start() async {
         catalog = (try? catalogStore.load()) ?? PlaceCatalog()
         history = (try? historyStore.load()) ?? []
+        suggestionState = (try? suggestionStore.load()) ?? SuggestionState()
         if let saved = try? preferencesStore.load() {
             preferences = saved
         } else {
@@ -140,6 +145,7 @@ public final class AppCoordinator {
         handle(effects: restored.effects)
 
         startTicking()
+        refreshSuggestions()
         refreshDisplay()
     }
 
@@ -245,10 +251,12 @@ public final class AppCoordinator {
             case .sessionEnded(let session):
                 history.append(session)
                 persistHistory()
+                refreshSuggestions()
             case .sessionResumed(_, let replacing):
                 history.removeAll { replacing.contains($0.id) }
                 persistHistory()
                 persistState(at: Date())
+                refreshSuggestions()
             case .markReached(_, let elapsed, let placeID):
                 notifier.notifyMark(
                     elapsed: elapsed,
@@ -297,6 +305,7 @@ public final class AppCoordinator {
         self.prompt = nil
         apply(.placeChosen(place.id))
         refreshDisplay()
+        refreshSuggestions()
     }
 
     /// Sorulan ağı zaten kayıtlı bir yere ekler (router'ın ikinci bandı gibi).
@@ -307,6 +316,7 @@ public final class AppCoordinator {
         self.prompt = nil
         apply(.placeChosen(placeID))
         refreshDisplay()
+        refreshSuggestions()
     }
 
     /// Panelden elle yer oluşturur ve oraya geçer.
@@ -340,6 +350,7 @@ public final class AppCoordinator {
         if let freeSSID { skippedSSIDs.remove(freeSSID) }
         persistCatalog()
         overrideCurrentPlace(place.id)
+        refreshSuggestions()
     }
 
     public func skipPrompt() {
@@ -368,6 +379,7 @@ public final class AppCoordinator {
             EngineConfiguration(preferences: preferences), at: Date()
         )
         refreshDisplay()
+        refreshSuggestions()
     }
 
     // MARK: - Manuel kontrol
@@ -397,6 +409,7 @@ public final class AppCoordinator {
         catalog.rename(placeID, to: name)
         persistCatalog()
         refreshDisplay()
+        refreshSuggestions()
     }
 
     public func removePlace(_ placeID: UUID) {
@@ -404,6 +417,7 @@ public final class AppCoordinator {
         if manualSelection?.placeID == placeID { manualSelection = nil }
         persistCatalog()
         refreshDisplay()
+        refreshSuggestions()
     }
 
     public func detachSSID(_ ssid: String, from placeID: UUID) {
@@ -435,6 +449,7 @@ public final class AppCoordinator {
         persistHistory()
         persistState(at: Date())
         refreshDisplay()
+        refreshSuggestions()
     }
 
     // MARK: - Oturum düzeltmeleri
@@ -529,6 +544,7 @@ public final class AppCoordinator {
         persistHistory()
         persistState(at: Date())
         refreshDisplay()
+        refreshSuggestions()
     }
 
     // MARK: - Gizlilik
@@ -543,6 +559,7 @@ public final class AppCoordinator {
         manualSelection = nil
         skippedSSIDs = []
         prompt = nil
+        suggestionState = SuggestionState()
         engine = SessionEngine(
             configuration: EngineConfiguration(preferences: preferences)
         )
@@ -551,6 +568,8 @@ public final class AppCoordinator {
         persistCatalog()
         persistHistory()
         persistState(at: Date())
+        persistSuggestionState()
+        refreshSuggestions()
         refreshDisplay()
     }
 
@@ -588,6 +607,68 @@ public final class AppCoordinator {
     private var allSessions: [Session] {
         guard let current = engine.currentSession else { return history }
         return history + [current]
+    }
+
+    // MARK: - Öneriler
+
+    /// Kullanıcı aynı türden aralığı üç kez birleştirdiyse ve eşik 1 saatin
+    /// altındaysa, ara eşiğini büyütmeyi önermek mantıklı.
+    public var offersLongerGap: Bool {
+        suggestionState.acceptedSplits >= 3 && preferences.gapThreshold < 3600
+    }
+
+    public func apply(_ suggestion: Suggestion) {
+        switch suggestion {
+        case .samePlace(let keep, let merge):
+            mergePlace(merge, into: keep)
+        case .splitSession(let first, let second):
+            if mergeSessions([first, second]) == nil {
+                suggestionState.acceptedSplits += 1
+            } else {
+                // Artık uygulanamıyor (arada başka oturum oluştu): bir daha sorma.
+                suggestionState.dismissed.insert(suggestion.id)
+            }
+        case .emptySession(let id):
+            deleteSession(id)
+        }
+        persistSuggestionState()
+        refreshSuggestions()
+    }
+
+    public func dismiss(_ suggestion: Suggestion) {
+        suggestionState.dismissed.insert(suggestion.id)
+        persistSuggestionState()
+        refreshSuggestions()
+    }
+
+    public func applyAllSuggestions() {
+        // Her uygulama listeyi yeniden kurar; sınır, uygulanamayan bir öneride
+        // sonsuz döngüye karşı.
+        for _ in 0..<200 {
+            guard let next = suggestions.first else { break }
+            apply(next)
+        }
+    }
+
+    public func adoptLongerGap() {
+        var updated = preferences
+        updated.gapThreshold = 3600
+        suggestionState.acceptedSplits = 0
+        persistSuggestionState()
+        updatePreferences(updated)
+    }
+
+    private func refreshSuggestions() {
+        suggestions = PlaceTimerCore.suggestions(
+            places: catalog.places,
+            sessions: allSessions,
+            dismissed: suggestionState.dismissed,
+            gapThreshold: preferences.gapThreshold
+        )
+    }
+
+    private func persistSuggestionState() {
+        try? suggestionStore.save(suggestionState)
     }
 
     // MARK: - Diske yazma ve görüntü
