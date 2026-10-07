@@ -7,7 +7,8 @@ import SwiftUI
 /// tekrarlıyordu: "1:39:25" ile "Aktif 1sa 38dk · Bugün burada 1sa 39dk".
 /// Okuyan kişi farkın ne olduğunu çıkaramıyordu. Burada her sayı bir kez ve
 /// kendi etiketiyle geçer; büyük olan hangi soruyu cevapladığını altındaki tek
-/// satırdan söyler.
+/// satırdan söyler. Büyük sayı bu oturum; altındaki ilk satır asıl soru —
+/// bugün laptopla toplam ne kadar.
 struct PanelSummaryView: View {
     @Bindable var coordinator: AppCoordinator
 
@@ -26,16 +27,20 @@ struct PanelSummaryView: View {
             }
 
             VStack(alignment: .leading, spacing: Design.tight) {
-                if let started = coordinator.sessionStartedAt {
+                LabeledContent(
+                    "Bugün toplam",
+                    value: DurationFormat.readable(coordinator.todayTotalSeconds)
+                )
+                // Tek yerli günde "Bugün burada" toplamın aynısı; tekrar etmiyoruz.
+                if coordinator.placesTodayCount > 1 {
                     LabeledContent(
-                        "Başlangıç",
-                        value: DurationFormat.time(started)
+                        "Bugün burada",
+                        value: DurationFormat.readable(coordinator.todayHereSeconds)
                     )
                 }
-                LabeledContent(
-                    "Bugün burada",
-                    value: DurationFormat.readable(coordinator.todayHereSeconds)
-                )
+                if let started = coordinator.sessionStartedAt {
+                    LabeledContent("Başlangıç", value: DurationFormat.time(started))
+                }
             }
             .font(.callout)
             .monospacedDigit()

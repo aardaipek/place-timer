@@ -9,9 +9,11 @@ import SwiftUI
 /// Bölümler artık yalnızca boşlukla ayrılıyor. Cam da yalnızca gerçekten
 /// yüzen şeyde, yani üstteki düğmelerde kaldı: düz zemine oturan statik bir
 /// metin bloğunun arkasında kıracak bir şey olmadığı için `glassEffect` orada
-/// yalnızca gri bir kutu üretiyordu.
+/// yalnızca gri bir kutu üretiyordu. Cam iki yerde: üstteki düğmeler ve öneri
+/// kartı — ikisi de içeriğin üstünde yüzen kontroller.
 public struct PanelView: View {
     @Bindable var coordinator: AppCoordinator
+    @Namespace private var glass
 
     public init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
@@ -25,6 +27,21 @@ public struct PanelView: View {
                 } else {
                     PanelHeaderView(coordinator: coordinator)
                     PanelSummaryView(coordinator: coordinator)
+
+                    // Boş kapsayıcı yığında bir aralık daha kaplardı.
+                    if !coordinator.suggestions.isEmpty {
+                        GlassEffectContainer {
+                            if let suggestion = coordinator.suggestions.first {
+                                PanelSuggestionCard(
+                                    suggestion: suggestion,
+                                    remaining: coordinator.suggestions.count - 1,
+                                    coordinator: coordinator
+                                )
+                                .glassEffectID(suggestion.id, in: glass)
+                            }
+                        }
+                        .animation(.snappy, value: coordinator.suggestions.first?.id)
+                    }
                 }
 
                 if coordinator.needsLocationPermission || coordinator.needsNotificationPermission {

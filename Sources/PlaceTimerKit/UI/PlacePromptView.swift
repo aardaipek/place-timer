@@ -22,7 +22,7 @@ struct PlacePromptView: View {
                         Button("Burası \(place.displayName)") {
                             coordinator.mergeIntoPlace(place.id)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
                     }
                 }
             }
@@ -34,7 +34,7 @@ struct PlacePromptView: View {
                         .foregroundStyle(.secondary)
                     ForEach(suggestions, id: \.self) { name in
                         Button(name) { coordinator.createPlace(named: name) }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.glass)
                     }
                 }
             }
@@ -44,6 +44,7 @@ struct PlacePromptView: View {
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(commit)
                 Button("Ekle", action: commit)
+                    .buttonStyle(.glassProminent)
                     .disabled(trimmedName.isEmpty)
             }
 

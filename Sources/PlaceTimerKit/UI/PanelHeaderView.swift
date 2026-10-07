@@ -24,34 +24,38 @@ struct PanelHeaderView: View {
 
             Spacer(minLength: Design.small)
 
-            Menu("Oturum kontrolleri", systemImage: "ellipsis") {
-                Button("Sayacı sıfırla", action: coordinator.endCurrentSession)
+            GlassEffectContainer(spacing: Design.tight) {
+                HStack(spacing: Design.tight) {
+                    Menu("Oturum kontrolleri", systemImage: "ellipsis") {
+                        Button("Sayacı sıfırla", action: coordinator.endCurrentSession)
 
-                // Menü artık boş katalogda da açık: "Yeni yer…" her zaman
-                // duruyor. Eskiden kayıtlı yer yokken menü tamamen kapalıydı
-                // ve bilgisayarı henüz bir ağa bağlanmamışken açan kullanıcının
-                // yeri belirlemek için hiçbir yolu kalmıyordu.
-                Menu("Yeri değiştir") {
-                    ForEach(coordinator.knownPlaces) { place in
-                        Button(place.displayName) { changePlace(to: place) }
+                        // Menü artık boş katalogda da açık: "Yeni yer…" her zaman
+                        // duruyor. Eskiden kayıtlı yer yokken menü tamamen kapalıydı
+                        // ve bilgisayarı henüz bir ağa bağlanmamışken açan kullanıcının
+                        // yeri belirlemek için hiçbir yolu kalmıyordu.
+                        Menu("Yeri değiştir") {
+                            ForEach(coordinator.knownPlaces) { place in
+                                Button(place.displayName) { changePlace(to: place) }
+                            }
+                            if !coordinator.knownPlaces.isEmpty { Divider() }
+                            Button("Yeni yer…", action: newPlace)
+                        }
+
+                        Divider()
+
+                        Button("Çıkış", action: coordinator.quit)
                     }
-                    if !coordinator.knownPlaces.isEmpty { Divider() }
-                    Button("Yeni yer…", action: newPlace)
+                    .labelStyle(.iconOnly)
+                    .menuStyle(.button)
+                    .buttonStyle(.glass)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+
+                    Button("Ayarlar", systemImage: "gearshape", action: openSettings)
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.glass)
                 }
-
-                Divider()
-
-                Button("Çıkış", action: coordinator.quit)
             }
-            .labelStyle(.iconOnly)
-            .menuStyle(.button)
-            .buttonStyle(.glass)
-            .menuIndicator(.hidden)
-            .fixedSize()
-
-            Button("Ayarlar", systemImage: "gearshape", action: openSettings)
-                .labelStyle(.iconOnly)
-                .buttonStyle(.glass)
         }
     }
 
