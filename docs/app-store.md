@@ -116,6 +116,8 @@ notarizasyon icindir — Developer ID ile dagitim yapilmadigi surece gerekmez.)
       `Scripts/build-app.sh --fresh` bunu yerelde yapar.
 - [ ] `swift test` ve `swift build -Xswiftc -warnings-as-errors` temiz mi?
 
+**1.1.0 (5)** — 7 Ekim 2026: TestFlight'a yüklendi (iç test grubu "Ic Test"). 137 test ve `-warnings-as-errors` derlemesi temiz; Xcode 27.0 ile derlendi.
+
 ## Bilinen kirilganlik
 
 `AppCoordinator.init` veri klasorunu olusturamazsa sessizce

@@ -1,7 +1,7 @@
 # PlaceTimer v3 — Doğru Ölçüm, Öneriler ve Liquid Glass Ayarlar
 
 **Tarih:** 2026-10-07
-**Durum:** Onaylandı, plana hazır
+**Durum:** Uygulandı, TestFlight'ta (1.1.0, derleme 5)
 **Önceki tasarım:** [v2, 2026-09-05](2026-09-05-place-timer-v2-design.md)
 
 ## 1. Neden
