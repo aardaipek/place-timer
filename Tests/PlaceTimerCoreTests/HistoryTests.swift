@@ -222,3 +222,114 @@ struct SessionsInRangeTests {
         #expect(sessionsOverlapping([uzak], interval: StatsPeriod.containing(at(0), scope: .day).interval, now: at(0)).isEmpty)
     }
 }
+
+@Suite("Oturum birleştirme")
+struct SessionMergeTests {
+
+    @Test("Aynı yerdeki oturumlar aradaki boşlukla birlikte tek oturum olur")
+    func mergesSamePlace() throws {
+        let ev = UUID()
+        let a = oturum(ev, from: 0, to: 30)
+        let b = oturum(ev, from: 40, to: 60)
+        let sonuc = try SessionHistory.merge([a.id, b.id], in: [a, b]).get()
+
+        #expect(sonuc.count == 1)
+        #expect(sonuc.first?.id == a.id)
+        #expect(sonuc.first?.startedAt == at(0))
+        #expect(sonuc.first?.endedAt == at(60))
+    }
+
+    @Test("Farklı yerler birleştirilemez")
+    func rejectsDifferentPlaces() {
+        let a = oturum(UUID(), from: 0, to: 30)
+        let b = oturum(UUID(), from: 40, to: 60)
+        #expect(SessionHistory.merge([a.id, b.id], in: [a, b]) == .failure(.differentPlaces))
+    }
+
+    @Test("Arada başka bir yerin oturumu varsa birleştirilemez")
+    func rejectsOverlapWithOthers() {
+        let ev = UUID()
+        let a = oturum(ev, from: 0, to: 30)
+        let arada = oturum(UUID(), from: 30, to: 40)
+        let b = oturum(ev, from: 40, to: 60)
+        #expect(SessionHistory.merge([a.id, b.id], in: [a, arada, b]) == .failure(.overlaps))
+    }
+
+    @Test("Tek oturum birleştirilemez")
+    func rejectsSingle() {
+        let a = oturum(UUID(), from: 0, to: 30)
+        #expect(SessionHistory.merge([a.id], in: [a]) == .failure(.tooFew))
+    }
+
+    @Test("Açık oturum katılırsa sonuç açık kalır")
+    func openSessionStaysOpen() throws {
+        let ev = UUID()
+        let a = oturum(ev, from: 0, to: 30)
+        let acik = Session(placeID: ev, startedAt: at(40))
+        let sonuc = try SessionHistory.merge([a.id, acik.id], in: [a, acik]).get()
+        #expect(sonuc.first?.endedAt == nil)
+        #expect(sonuc.first?.startedAt == at(0))
+    }
+
+    @Test("Önceki oturum aynı yerdeki en yakın eski oturumdur")
+    func previousSession() {
+        let ev = UUID()
+        let a = oturum(ev, from: 0, to: 30)
+        let baska = oturum(UUID(), from: 30, to: 35)
+        let b = oturum(ev, from: 40, to: 60)
+        #expect(SessionHistory.previous(of: b.id, in: [a, baska, b])?.id == a.id)
+        #expect(SessionHistory.previous(of: a.id, in: [a, baska, b]) == nil)
+    }
+}
+
+@Suite("Oturum düzenleme")
+struct SessionEditTests {
+
+    @Test("Saatler değişir")
+    func updatesTimes() throws {
+        var a = oturum(UUID(), from: 0, to: 30)
+        a.startedAt = at(5)
+        let sonuc = try SessionHistory.update(a, in: [a], now: at(100)).get()
+        #expect(sonuc.first?.startedAt == at(5))
+    }
+
+    @Test("Bitiş başlangıçtan önce olamaz")
+    func rejectsInvertedRange() {
+        var a = oturum(UUID(), from: 0, to: 30)
+        a.endedAt = at(-5)
+        #expect(SessionHistory.update(a, in: [a], now: at(100)) == .failure(.invalidRange))
+    }
+
+    @Test("Başlangıç gelecekte olamaz")
+    func rejectsFuture() {
+        var a = Session(placeID: UUID(), startedAt: at(0))
+        a.startedAt = at(200)
+        #expect(SessionHistory.update(a, in: [a], now: at(100)) == .failure(.future))
+    }
+
+    @Test("Komşu oturumla çakışamaz")
+    func rejectsOverlap() {
+        let a = oturum(UUID(), from: 0, to: 30)
+        var b = oturum(UUID(), from: 40, to: 60)
+        b.startedAt = at(20)
+        #expect(SessionHistory.update(b, in: [a, b], now: at(100)) == .failure(.overlaps))
+    }
+}
+
+@Suite("Açık oturumun değiştirilmesi")
+struct ReplaceCurrentTests {
+
+    @Test("Açık oturum değiştirilir, son kapananlar unutulur")
+    func replaceForgetsRecent() {
+        let ev = UUID()
+        var engine = SessionEngine(recentlyEnded: [oturum(ev, from: 0, to: 10)])
+        engine.handle(.wake, at: at(100))   // eşikten sonra: yeni oturum
+        var yeni = engine.currentSession!
+        yeni.startedAt = at(50)
+
+        engine.replaceCurrentSession(yeni)
+
+        #expect(engine.currentSession?.startedAt == at(50))
+        #expect(engine.recentlyEnded.isEmpty)
+    }
+}

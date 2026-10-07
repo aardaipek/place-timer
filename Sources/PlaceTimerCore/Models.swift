@@ -41,7 +41,7 @@ public struct Session: Codable, Sendable, Identifiable, Equatable {
     public let id: UUID
     /// Oturum "Bilinmeyen yer"de başladıysa nil; yer sonradan çözülürse doldurulur.
     public var placeID: UUID?
-    public let startedAt: Date
+    public var startedAt: Date
     public var endedAt: Date?
     /// 1.0'ın klavye/fare etkinliği sayacı. Artık yazılmıyor ve gösterilmiyor;
     /// eski dosyalar bozulmadan okunsun diye alan duruyor.

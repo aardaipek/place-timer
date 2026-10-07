@@ -124,6 +124,13 @@ public struct SessionEngine: Sendable {
         recentlyEnded.removeAll()
     }
 
+    /// Açık oturumu elle düzeltilmiş hâliyle değiştirir (birleştirme, saat
+    /// düzeltme, geri alma). Son kapananlar da unutulur.
+    public mutating func replaceCurrentSession(_ session: Session) {
+        currentSession = session
+        recentlyEnded.removeAll()
+    }
+
     private mutating func handleWake(at now: Date) -> [SessionEffect] {
         isAsleep = false
         isAway = false

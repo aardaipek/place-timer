@@ -43,6 +43,7 @@ public final class AppCoordinator {
     public private(set) var preferences = Preferences()
     public private(set) var todaySegments: [DaySegment] = []
     public private(set) var todayHereSeconds: TimeInterval = 0
+    public private(set) var canUndo = false
     public private(set) var todayTotalSeconds: TimeInterval = 0
     /// Bugün kaç farklı yerde bulunuldu; tek yerse panel "Bugün burada"yı
     /// "Bugün toplam"ın tekrarı olarak göstermez.
@@ -75,6 +76,10 @@ public final class AppCoordinator {
     /// Kullanıcının "burası aslında şurası" düzeltmesi; geçerli olduğu sürece
     /// katalog eşleşmesini bastırır.
     private var manualSelection: ManualPlaceSelection?
+
+    /// Son elle düzeltmeden önceki hâl. Tek adımlık geri alma yeterli: kullanıcı
+    /// bir şeyi yanlış birleştirdiğinde hemen fark eder.
+    private var undoSnapshot: (history: [Session], current: Session?)?
 
     /// Ağ kaç tick'te bir yoklanır. Wi-Fi değişimi anlık algılanmak zorunda
     /// değil; 10 saniyelik gecikme oturum sınırlarını gözle görülür biçimde
@@ -224,6 +229,15 @@ public final class AppCoordinator {
     }
 
     private func handle(effects: [SessionEffect]) {
+        // Motor oturumu kendisi değiştirdiyse eski anlık görüntü geçersiz.
+        let changesSessions = effects.contains { effect in
+            if case .markReached = effect { return false }
+            return true
+        }
+        if changesSessions {
+            undoSnapshot = nil
+            canUndo = false
+        }
         for effect in effects {
             switch effect {
             case .sessionStarted:
@@ -428,16 +442,92 @@ public final class AppCoordinator {
     /// Süren oturum; listede silinemez olarak işaretlenir.
     public var currentSessionID: UUID? { engine.currentSession?.id }
 
-    /// Yanlış açılmış bir oturumu siler.
-    ///
-    /// Açık oturum silinmiyor: bir sayacı kendi altından çekmek yerine
-    /// paneldeki "Sayacı sıfırla" onu kapatıp yenisini açar, kapanan oturum da
-    /// listeye düşüp buradan silinebilir.
-    public func deleteSession(_ sessionID: UUID) {
-        guard engine.currentSession?.id != sessionID else { return }
-        history = SessionHistory.remove(sessionID, from: history)
+    public func session(id: UUID) -> Session? {
+        allSessions.first { $0.id == id }
+    }
+
+    public func previousSession(of id: UUID) -> Session? {
+        SessionHistory.previous(of: id, in: allSessions)
+    }
+
+    /// Yanlış açılmış oturumları siler. Açık oturum silinmez: paneldeki
+    /// "Sayacı sıfırla" onu kapatıp yenisini açar.
+    public func deleteSessions(_ ids: Set<UUID>) {
+        let removable = ids.subtracting([engine.currentSession?.id].compactMap { $0 })
+        guard !removable.isEmpty else { return }
+        recordUndo()
+        history.removeAll { removable.contains($0.id) }
+        commitHistoryEdit()
+    }
+
+    public func deleteSession(_ id: UUID) {
+        deleteSessions([id])
+    }
+
+    @discardableResult
+    public func mergeSessions(_ ids: Set<UUID>) -> SessionHistory.EditError? {
+        switch SessionHistory.merge(ids, in: allSessions) {
+        case .failure(let error):
+            return error
+        case .success(let merged):
+            recordUndo()
+            apply(edited: merged)
+            return nil
+        }
+    }
+
+    @discardableResult
+    public func mergeWithPrevious(_ id: UUID) -> SessionHistory.EditError? {
+        guard let previous = previousSession(of: id) else { return .tooFew }
+        return mergeSessions([previous.id, id])
+    }
+
+    public func validateEdit(_ session: Session) -> SessionHistory.EditError? {
+        if case .failure(let error) = SessionHistory.update(session, in: allSessions, now: Date()) {
+            return error
+        }
+        return nil
+    }
+
+    @discardableResult
+    public func updateSession(_ session: Session) -> SessionHistory.EditError? {
+        switch SessionHistory.update(session, in: allSessions, now: Date()) {
+        case .failure(let error):
+            return error
+        case .success(let updated):
+            recordUndo()
+            apply(edited: updated)
+            return nil
+        }
+    }
+
+    public func undoLastEdit() {
+        guard let snapshot = undoSnapshot else { return }
+        history = snapshot.history
+        if let current = snapshot.current { engine.replaceCurrentSession(current) }
+        undoSnapshot = nil
+        canUndo = false
+        commitHistoryEdit()
+    }
+
+    private func recordUndo() {
+        undoSnapshot = (history, engine.currentSession)
+        canUndo = true
+    }
+
+    /// Düzeltilmiş tam listeyi (geçmiş + açık oturum) geri dağıtır.
+    private func apply(edited sessions: [Session]) {
+        if let open = sessions.first(where: { $0.endedAt == nil }) {
+            engine.replaceCurrentSession(open)
+        }
+        history = sessions.filter { $0.endedAt != nil }
+        commitHistoryEdit()
+    }
+
+    private func commitHistoryEdit() {
         engine.forgetRecent()
         persistHistory()
+        persistState(at: Date())
         refreshDisplay()
     }
 
