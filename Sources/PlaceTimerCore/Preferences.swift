@@ -31,39 +31,61 @@ public enum NotificationInterval: String, Codable, Sendable, CaseIterable {
 public struct Preferences: Codable, Sendable, Equatable {
     public var showSeconds: Bool
     public var showPlaceNameInMenuBar: Bool
-    public var sessionResetSleepThreshold: TimeInterval
-    public var idleThreshold: TimeInterval
+    /// Bu süreden uzun ara (uyku, ekran kapalı, dokunmamak) oturumu, aranın
+    /// başladığı anda kapatır.
+    public var gapThreshold: TimeInterval
     public var notificationInterval: NotificationInterval
+
+    /// Ayarlarda sunulan ara eşikleri. "Hemen" yok: ekran kararması da ara
+    /// sayıldığı için her bakışını kaçıran kullanıcının oturumu bölünürdü.
+    public static let gapOptions: [TimeInterval] = [15 * 60, 30 * 60, 60 * 60, 2 * 60 * 60]
 
     public init(
         showSeconds: Bool = false,
         showPlaceNameInMenuBar: Bool = true,
-        sessionResetSleepThreshold: TimeInterval = 60 * 60,
-        idleThreshold: TimeInterval = 5 * 60,
+        gapThreshold: TimeInterval = 30 * 60,
         notificationInterval: NotificationInterval = .hourly
     ) {
         self.showSeconds = showSeconds
         self.showPlaceNameInMenuBar = showPlaceNameInMenuBar
-        self.sessionResetSleepThreshold = sessionResetSleepThreshold
-        self.idleThreshold = idleThreshold
+        self.gapThreshold = gapThreshold
         self.notificationInterval = notificationInterval
+    }
+
+    /// Seçenek listesindeki en yakın değer. 1.0'ın serbest uyku eşiği
+    /// (0'dan 4 saate) buradan geçerek yeni listeye oturuyor.
+    public static func nearestGapOption(to seconds: TimeInterval) -> TimeInterval {
+        gapOptions.min { abs($0 - seconds) < abs($1 - seconds) } ?? 30 * 60
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case showSeconds, showPlaceNameInMenuBar, gapThreshold, notificationInterval
+    }
+
+    /// 1.0 bu anahtarları yazıyordu. Ayrı bir anahtar kümesinden okuyoruz ki
+    /// `encode` sentezlenmeye devam etsin ve eski anahtarlar geri yazılmasın.
+    private enum LegacyKeys: String, CodingKey {
+        case sessionResetSleepThreshold
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let legacy = try decoder.container(keyedBy: LegacyKeys.self)
         let defaults = Preferences()
+
+        let gap = try container.decodeIfPresent(TimeInterval.self, forKey: .gapThreshold)
+            ?? legacy.decodeIfPresent(
+                TimeInterval.self, forKey: .sessionResetSleepThreshold
+            ).map(Self.nearestGapOption(to:))
+            ?? defaults.gapThreshold
+
         self.init(
             showSeconds: try container.decodeIfPresent(Bool.self, forKey: .showSeconds)
                 ?? defaults.showSeconds,
             showPlaceNameInMenuBar: try container.decodeIfPresent(
                 Bool.self, forKey: .showPlaceNameInMenuBar
             ) ?? defaults.showPlaceNameInMenuBar,
-            sessionResetSleepThreshold: try container.decodeIfPresent(
-                TimeInterval.self, forKey: .sessionResetSleepThreshold
-            ) ?? defaults.sessionResetSleepThreshold,
-            idleThreshold: try container.decodeIfPresent(
-                TimeInterval.self, forKey: .idleThreshold
-            ) ?? defaults.idleThreshold,
+            gapThreshold: gap,
             notificationInterval: try container.decodeIfPresent(
                 NotificationInterval.self, forKey: .notificationInterval
             ) ?? defaults.notificationInterval

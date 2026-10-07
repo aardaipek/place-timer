@@ -1,16 +1,15 @@
 import AppKit
 import Foundation
 
-/// Uyku/uyanma ve ekran kilidi olaylarını dinler.
+/// Sistem uykusu ve uyanmayı dinler.
 ///
-/// Uyku bildirimleri `NSWorkspace`ten, kilit bildirimleri ise sistemin
-/// dağıtılmış bildirim merkezinden gelir — ikisi ayrı kaynaklardır.
+/// Ekranın kararması ve kilit bilinçli olarak dinlenmiyor: ikisi de uyanık bir
+/// Mac'te `IdleReader`'ın süresini büyütür ve motorun ara kuralına oradan
+/// girer. Uyku sayılsalardı agent'ı bekleyen kullanıcının oturumu bölünürdü.
 @MainActor
 public final class PowerMonitor {
     public var onSleep: (() -> Void)?
     public var onWake: (() -> Void)?
-    public var onScreenLocked: (() -> Void)?
-    public var onScreenUnlocked: (() -> Void)?
 
     private var observations: [(center: NotificationCenter, token: NSObjectProtocol)] = []
 
@@ -22,17 +21,6 @@ public final class PowerMonitor {
         let workspace = NSWorkspace.shared.notificationCenter
         observe(workspace, NSWorkspace.willSleepNotification) { $0.onSleep?() }
         observe(workspace, NSWorkspace.didWakeNotification) { $0.onWake?() }
-        // Kapak kapanması ayrı bir bildirim; uyku ile aynı muamele görür.
-        observe(workspace, NSWorkspace.screensDidSleepNotification) { $0.onSleep?() }
-        observe(workspace, NSWorkspace.screensDidWakeNotification) { $0.onWake?() }
-
-        let distributed = DistributedNotificationCenter.default()
-        observe(distributed, Notification.Name("com.apple.screenIsLocked")) {
-            $0.onScreenLocked?()
-        }
-        observe(distributed, Notification.Name("com.apple.screenIsUnlocked")) {
-            $0.onScreenUnlocked?()
-        }
     }
 
     public func stop() {

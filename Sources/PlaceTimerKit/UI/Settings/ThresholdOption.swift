@@ -1,4 +1,5 @@
 import Foundation
+import PlaceTimerCore
 
 /// Ayarlardaki eşik seçenekleri.
 ///
@@ -13,23 +14,9 @@ struct ThresholdOption: Identifiable, Hashable {
 
     var id: TimeInterval { seconds }
 
-    /// "Hemen" gercek bir secenek: esik sifirken her uyku oturumu kapatir ve
-    /// oturum uyanista degil, uykuya dalinan anda biter. Kapagi kapatinca
-    /// sayacin durmasini isteyen kullanicinin istedigi tam olarak bu.
-    static let sleep: [ThresholdOption] = [
-        ThresholdOption(title: "Hemen", seconds: 0),
-        ThresholdOption(title: "5 dakika", seconds: 5 * 60),
-        ThresholdOption(title: "15 dakika", seconds: 15 * 60),
-        ThresholdOption(title: "30 dakika", seconds: 30 * 60),
-        ThresholdOption(title: "1 saat", seconds: 60 * 60),
-        ThresholdOption(title: "2 saat", seconds: 2 * 60 * 60),
-        ThresholdOption(title: "4 saat", seconds: 4 * 60 * 60),
-    ]
-
-    static let idle: [ThresholdOption] = [
-        ThresholdOption(title: "2 dakika", seconds: 2 * 60),
-        ThresholdOption(title: "5 dakika", seconds: 5 * 60),
-        ThresholdOption(title: "10 dakika", seconds: 10 * 60),
-        ThresholdOption(title: "15 dakika", seconds: 15 * 60),
-    ]
+    static let gap: [ThresholdOption] = Preferences.gapOptions.map { seconds in
+        let minutes = Int(seconds / 60)
+        let title = minutes < 60 ? "\(minutes) dakika" : "\(minutes / 60) saat"
+        return ThresholdOption(title: title, seconds: seconds)
+    }
 }

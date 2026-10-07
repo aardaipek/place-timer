@@ -33,10 +33,6 @@ struct PanelSummaryView: View {
                     )
                 }
                 LabeledContent(
-                    "Aktif",
-                    value: DurationFormat.readable(coordinator.activeSeconds)
-                )
-                LabeledContent(
                     "Bugün burada",
                     value: DurationFormat.readable(coordinator.todayHereSeconds)
                 )

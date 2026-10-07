@@ -28,7 +28,6 @@ public final class AppCoordinator {
 
     public private(set) var placeName: String = "Bilinmeyen yer"
     public private(set) var elapsed: TimeInterval = 0
-    public private(set) var activeSeconds: TimeInterval = 0
     public private(set) var prompt: PlacePrompt? {
         didSet {
             guard prompt != oldValue else { return }
@@ -118,8 +117,6 @@ public final class AppCoordinator {
 
         power.onSleep = { [weak self] in self?.apply(.sleep) }
         power.onWake = { [weak self] in self?.apply(.wake) }
-        power.onScreenLocked = { [weak self] in self?.apply(.screenLocked) }
-        power.onScreenUnlocked = { [weak self] in self?.apply(.screenUnlocked) }
         power.start()
 
         if location.isAuthorized { location.startUpdating() }
@@ -493,7 +490,6 @@ public final class AppCoordinator {
 
     private func refreshDisplay(now: Date = Date()) {
         elapsed = engine.elapsed(at: now)
-        activeSeconds = engine.activeSeconds
         placeName = placeName(for: engine.currentSession?.placeID)
 
         todaySegments = daySegments(from: allSessions, on: now)

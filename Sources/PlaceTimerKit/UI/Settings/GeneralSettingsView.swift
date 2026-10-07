@@ -23,17 +23,19 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                Picker("Uyku eşiği", selection: $draft.sessionResetSleepThreshold) {
-                    ForEach(ThresholdOption.sleep) { Text($0.title).tag($0.seconds) }
-                }
-
-                Picker("Hareketsizlik eşiği", selection: $draft.idleThreshold) {
-                    ForEach(ThresholdOption.idle) { Text($0.title).tag($0.seconds) }
+                Picker("Ara eşiği", selection: $draft.gapThreshold) {
+                    ForEach(ThresholdOption.gap) { Text($0.title).tag($0.seconds) }
                 }
             } header: {
                 Text("Oturum")
             } footer: {
-                sessionFooter
+                Text(
+                    "Bilgisayardan bu süreden uzun uzak kalırsan oturum, ayrıldığın "
+                        + "anda biter. Daha kısa aralar — mutfak, agent'ı beklemek, "
+                        + "Wi-Fi kopması — oturumu bozmaz."
+                )
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             Section {
@@ -98,29 +100,6 @@ struct GeneralSettingsView: View {
             .glassEffect(in: .capsule)
         }
         .animation(.snappy, value: draft)
-    }
-
-    /// "Hemen" eşiği ötekilerden başka bir şey anlatıyor; açıklama da onunla
-    /// birlikte değişiyor. Sabit bir metin ya birini ya ötekini yanlış anlatırdı.
-    @ViewBuilder
-    private var sessionFooter: some View {
-        if draft.sessionResetSleepThreshold == 0 {
-            Text(
-                "Kapağı kapattığın an oturum biter; kapalı geçen süre hiçbir yere "
-                    + "yazılmaz. Hareketsizlik eşiği ise aktif çalışma sayacının ne "
-                    + "zaman duracağını belirler."
-            )
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        } else {
-            Text(
-                "Uyku eşiği oturumun ne zaman kapanacağını, hareketsizlik eşiği "
-                    + "aktif çalışma sayacının ne zaman duracağını belirler. "
-                    + "Eşikten kısa molalar — kahve almak, tuvalet — oturumu bozmaz."
-            )
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
     }
 
     @ViewBuilder

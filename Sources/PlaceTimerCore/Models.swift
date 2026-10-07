@@ -43,7 +43,8 @@ public struct Session: Codable, Sendable, Identifiable, Equatable {
     public var placeID: UUID?
     public let startedAt: Date
     public var endedAt: Date?
-    /// Klavye/fare etkinliği olan saniyelerin toplamı.
+    /// 1.0'ın klavye/fare etkinliği sayacı. Artık yazılmıyor ve gösterilmiyor;
+    /// eski dosyalar bozulmadan okunsun diye alan duruyor.
     public var activeSeconds: TimeInterval
     /// Bildirimi gönderilmiş aralık işaretleri (1, 2, 3 …). Yeniden başlatmada
     /// aynı bildirimin tekrar gitmemesi için diske yazılır.
@@ -95,7 +96,7 @@ public struct Session: Codable, Sendable, Identifiable, Equatable {
         )
     }
 
-    /// Yerde geçen süre: duvar saati, 60 dk altındaki uyku aralarını içerir.
+    /// Yerde geçen süre: duvar saati, ara eşiğinden kısa araları içerir.
     public func elapsed(at now: Date) -> TimeInterval {
         max(0, (endedAt ?? now).timeIntervalSince(startedAt))
     }
@@ -109,11 +110,12 @@ public enum PlaceRef: Sendable, Equatable, Hashable {
 }
 
 /// `SessionEngine`'in tükettiği olaylar. Hiçbiri sistem tipi içermez.
+///
+/// Ekran kilidi ve ekranın kararması ayrı olay değil: ikisi de `tick`'teki
+/// `idleSeconds`'ı büyütür ve ara kuralına oradan girer.
 public enum SessionEvent: Sendable, Equatable {
     case wake
     case sleep
-    case screenLocked
-    case screenUnlocked
     case placeResolved(PlaceRef)
     /// Saniyede bir; `idleSeconds` son kullanıcı girdisinden bu yana geçen süre.
     case tick(idleSeconds: TimeInterval)
@@ -131,33 +133,28 @@ public enum SessionEffect: Sendable, Equatable {
 }
 
 public struct EngineConfiguration: Sendable, Equatable {
-    /// Bu süreyi aşan uyku oturumu kapatır.
-    public var sessionResetSleepThreshold: TimeInterval
-    /// Bu süreden uzun hareketsizlikte aktif sayaç durur.
-    public var idleThreshold: TimeInterval
-    /// İki tick arasında sayaca eklenebilecek azami süre; kaçan tick'lerin
-    /// aktif süreyi şişirmesini engeller.
-    public var maxTickDelta: TimeInterval
+    /// Bu süreden uzun ara oturumu aranın başladığı anda kapatır.
+    public var gapThreshold: TimeInterval
+    /// Bilinen bir yerden başka bir bilinen yere geçişin onaylanması için yeni
+    /// yerin kesintisiz görülmesi gereken süre. Bant/AP gidip gelmelerini yutar.
+    public var placeChangeStability: TimeInterval
     /// Bildirim aralığı saniye cinsinden; `nil` ise bildirim üretilmez.
     public var notificationInterval: TimeInterval?
 
     public init(
-        sessionResetSleepThreshold: TimeInterval = 60 * 60,
-        idleThreshold: TimeInterval = 5 * 60,
-        maxTickDelta: TimeInterval = 5,
+        gapThreshold: TimeInterval = 30 * 60,
+        placeChangeStability: TimeInterval = 3 * 60,
         notificationInterval: TimeInterval? = 60 * 60
     ) {
-        self.sessionResetSleepThreshold = sessionResetSleepThreshold
-        self.idleThreshold = idleThreshold
-        self.maxTickDelta = maxTickDelta
+        self.gapThreshold = gapThreshold
+        self.placeChangeStability = placeChangeStability
         self.notificationInterval = notificationInterval
     }
 
     /// Kullanıcı ayarlarından türetir.
     public init(preferences: Preferences) {
         self.init(
-            sessionResetSleepThreshold: preferences.sessionResetSleepThreshold,
-            idleThreshold: preferences.idleThreshold,
+            gapThreshold: preferences.gapThreshold,
             notificationInterval: preferences.notificationInterval.seconds
         )
     }
