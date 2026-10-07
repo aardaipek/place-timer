@@ -61,7 +61,7 @@ public final class PlaceTimerAppDelegate: NSObject, NSApplicationDelegate {
 
     private let onboardingWindow = AppWindow(title: "PlaceTimer")
     private let promptWindow = AppWindow(title: "Yeni yer")
-    private let settingsWindow = AppWindow(title: "Ayarlar")
+    private let settingsWindow = AppWindow(title: "Ayarlar", style: .settings)
     private let newPlaceWindow = AppWindow(title: "Yeni yer")
 
     public override init() {
@@ -93,10 +93,15 @@ public final class PlaceTimerAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    public func presentSettings() {
+    func presentSettings(tab: SettingsTab? = nil) {
+        if let tab { coordinator.requestedSettingsTab = tab }
         settingsWindow.present { [weak self] in
             if let self { SettingsView(coordinator: coordinator) }
         }
+    }
+
+    public func presentSettings() {
+        presentSettings(tab: nil)
     }
 
     public func presentNewPlace() {

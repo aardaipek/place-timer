@@ -44,6 +44,10 @@ public final class AppCoordinator {
     public private(set) var todaySegments: [DaySegment] = []
     public private(set) var todayHereSeconds: TimeInterval = 0
     public private(set) var canUndo = false
+
+    /// Panelden "ayarların şu bölümünü aç" isteği. Ayarlar penceresi zaten
+    /// açıksa da sekme değişsin diye pencere bunu izler ve tüketir.
+    var requestedSettingsTab: SettingsTab?
     public private(set) var suggestions: [Suggestion] = []
     public private(set) var todayTotalSeconds: TimeInterval = 0
     /// Bugün kaç farklı yerde bulunuldu; tek yerse panel "Bugün burada"yı

@@ -12,6 +12,10 @@ import SwiftUI
 /// Kenar çubuğu hem bu çift başlığı kaldırıyor hem de bölüm adlarını
 /// kısaltmadan gösteriyor: dört simgenin altına sıkışan metinler yerine
 /// okunur bir liste. Seçili bölümün adı pencere başlığına da geçiyor.
+///
+/// Pencere `AppWindow.Style.settings` ile açılıyor; kenar çubuğu ve araç
+/// çubuğu sistemin cam katmanı. İçerik bilinçli olarak cam değil: Liquid Glass
+/// gezinme ve kontrol katmanı içindir, okunacak metin için değil.
 public struct SettingsView: View {
     @Bindable var coordinator: AppCoordinator
     @State private var tab: SettingsTab = .genel
@@ -27,6 +31,7 @@ public struct SettingsView: View {
                     .tag(bolum)
             }
             .navigationSplitViewColumnWidth(Design.settingsSidebarWidth)
+            .toolbar(removing: .sidebarToggle)
         } detail: {
             pane
                 .navigationTitle(tab.title)
@@ -34,6 +39,11 @@ public struct SettingsView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .frame(width: Design.settingsWidth, height: Design.settingsHeight)
+        .onChange(of: coordinator.requestedSettingsTab, initial: true) { _, istenen in
+            guard let istenen else { return }
+            tab = istenen
+            coordinator.requestedSettingsTab = nil
+        }
     }
 
     @ViewBuilder

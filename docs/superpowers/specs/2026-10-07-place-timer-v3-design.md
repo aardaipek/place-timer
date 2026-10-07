@@ -250,9 +250,12 @@ Değişiklikler:
 1. **Pencere:** `.fullSizeContentView` + `.titled` + `.closable` +
    `.miniaturizable`, `titlebarAppearsTransparent`, birleşik araç çubuğu
    (`toolbarStyle = .unified`). Kenar çubuğu sistemin yüzen cam paneli olur.
-2. **Kenar çubuğu:** `NavigationSplitView` kalır; detay tarafına
-   `.backgroundExtensionEffect()` (içerik camın altına uzansın). Simgeler
-   SF Symbols, tek renk (bugünkü gibi).
+2. **Kenar çubuğu:** `NavigationSplitView` kalır, kenar çubuğu açma/kapama
+   düğmesi kalkar (`.toolbar(removing: .sidebarToggle)`); pencere sabit ölçülü,
+   kenar çubuğu her zaman görünür. Simgeler SF Symbols, tek renk.
+   `backgroundExtensionEffect` kullanılmaz: o, kenar çubuğunun altına uzanacak
+   bir görsel (fotoğraf, harita) içindir; gruplu formda yalnızca bulanık bir
+   şerit üretir.
 3. **Araç çubuğu:** Her bölümün başlığı ve bölüme özgü kontroller
    (İstatistik'te aralık seçici ve `‹ ›`, Yerler'de `+`) `toolbar` içinde.
    Bunlar otomatik olarak cam kapsüllere oturur. Bugün içeriğin tepesinde

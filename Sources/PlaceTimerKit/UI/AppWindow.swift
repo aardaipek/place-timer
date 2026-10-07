@@ -10,10 +10,21 @@ public final class AppWindow {
     private var window: NSWindow?
     private var closeObserver: NSObjectProtocol?
     private let title: String
+
+    /// Ayarlar penceresi macOS 26'nın cam kabuğunu alır: tam boy içerik,
+    /// birleşik araç çubuğu ve yüzen kenar çubuğu. Diğer küçük pencereler
+    /// (yer sorusu, ilk açılış) sade kalır.
+    public enum Style {
+        case standard
+        case settings
+    }
+
+    private let style: Style
     private static var openCount = 0
 
-    public init(title: String) {
+    public init(title: String, style: Style = .standard) {
         self.title = title
+        self.style = style
     }
 
     public var isOpen: Bool { window != nil }
@@ -29,9 +40,23 @@ public final class AppWindow {
         NSApp.setActivationPolicy(.regular)
 
         let controller = NSHostingController(rootView: content())
+        if style == .settings {
+            // SwiftUI'nin `.toolbar` ve `.navigationTitle`'ı pencereye geçsin.
+            controller.sceneBridgingOptions = [.toolbars, .title]
+        }
         let window = NSWindow(contentViewController: controller)
         window.title = title
-        window.styleMask = [.titled, .closable]
+        switch style {
+        case .standard:
+            window.styleMask = [.titled, .closable]
+        case .settings:
+            // `.fullSizeContentView` olmadan kenar çubuğu pencere kenarına
+            // yapışık düz bir sütun çiziliyordu; cam panel ancak içerik
+            // başlık çubuğunun altına uzandığında çıkıyor.
+            window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+            window.titlebarAppearsTransparent = true
+            window.toolbarStyle = .unified
+        }
         window.isReleasedWhenClosed = false
 
         // Boyut ve konum tek adimda kuruluyor. Once boyutlandirip sonra
