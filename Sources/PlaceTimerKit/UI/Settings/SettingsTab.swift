@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 /// Ayarlar penceresinin bölümleri.
 ///
@@ -29,5 +29,23 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
         case .istatistik: "chart.bar"
         case .hakkinda: "info.circle"
         }
+    }
+
+    /// Simgenin arkasındaki renk. Sistem Ayarları'ndaki gibi her bölüm kendi
+    /// renginde: liste göz ucuyla, okumadan taranıyor.
+    var tint: Color {
+        switch self {
+        case .genel: .gray
+        case .yerler: .blue
+        case .izinler: .green
+        case .istatistik: .orange
+        case .hakkinda: .indigo
+        }
+    }
+
+    /// ⌘1 … ⌘5.
+    var shortcut: KeyEquivalent {
+        let index = Self.allCases.firstIndex(of: self) ?? 0
+        return KeyEquivalent(Character(String(index + 1)))
     }
 }

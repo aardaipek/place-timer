@@ -5,23 +5,21 @@ import SwiftUI
 ///
 /// Üstte asıl sorunun cevabı (toplam ve önceki dönemle fark), altında
 /// öneriler, yerler ve günlere bölünmüş oturumlar. Dönem seçimi ve gezinme
-/// pencerenin cam araç çubuğunda; içerikte kontrol kalabalığı yok.
+/// ayarlar penceresinin başlığında (`StatsHeaderControls`); içerikte kontrol
+/// kalabalığı yok.
 ///
 /// Oturumlar `List` içinde: seçim, ⌫ ile silme ve sağ tık menüsü `Form`'da
 /// yok. Satır içi "Sil" linkleri bu yüzden kalktı.
 struct StatisticsSettingsView: View {
     @Bindable var coordinator: AppCoordinator
 
-    @State private var scope: StatsScope = .week
-    @State private var period = StatsPeriod.containing(Date(), scope: .week)
+    @Bindable var navigation: StatsNavigation
     @State private var selection: Set<UUID> = []
     @State private var editing: Session?
-    @State private var exporting = false
-    /// Dışa aktarma anında üretilir; gövdede kurulsaydı her çizimde bütün
-    /// dönemin CSV'si yeniden yazılırdı.
-    @State private var exportDocument: CSVDocument?
     @State private var editError: SessionHistory.EditError?
     @State private var showsEditError = false
+
+    private var period: StatsPeriod { navigation.period }
 
     var body: some View {
         let days = coordinator.sessionDays(in: period)
@@ -113,16 +111,12 @@ struct StatisticsSettingsView: View {
             // Görünmeyen satırlar ⌫ ile silinmesin.
             selection = []
         }
-        .onChange(of: scope) { _, yeni in
-            period = .containing(Date(), scope: yeni)
-        }
-        .toolbar { toolbarContent }
         .sheet(item: $editing) { session in
             SessionEditView(coordinator: coordinator, session: session)
         }
         .fileExporter(
-            isPresented: $exporting,
-            document: exportDocument,
+            isPresented: $navigation.exporting,
+            document: navigation.exportDocument,
             contentType: .commaSeparatedText,
             defaultFilename: "PlaceTimer \(period.title(now: Date()))"
         ) { _ in }
@@ -146,39 +140,6 @@ struct StatisticsSettingsView: View {
     private func onlyCurrent(_ ids: Set<UUID>) -> Bool {
         guard let current = coordinator.currentSessionID else { return false }
         return ids == [current]
-    }
-
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            Picker("Ölçek", selection: $scope) {
-                ForEach(StatsScope.allCases, id: \.self) { Text($0.displayName).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-        }
-        ToolbarItemGroup(placement: .primaryAction) {
-            ControlGroup {
-                Button("Önceki", systemImage: "chevron.left") {
-                    period = period.shifted(by: -1)
-                }
-                Button("Sonraki", systemImage: "chevron.right") {
-                    period = period.shifted(by: 1)
-                }
-                .disabled(period.contains(Date()))
-            }
-            Button("Bugün") {
-                period = .containing(Date(), scope: scope)
-            }
-            .disabled(period.contains(Date()))
-            Button("Geri al", systemImage: "arrow.uturn.backward", action: coordinator.undoLastEdit)
-                .keyboardShortcut("z")
-                .disabled(!coordinator.canUndo)
-            Button("Dışa aktar…", systemImage: "square.and.arrow.up") {
-                exportDocument = CSVDocument(text: coordinator.csv(in: period))
-                exporting = true
-            }
-        }
     }
 
     @ViewBuilder
@@ -227,6 +188,9 @@ struct StatisticsSettingsView: View {
 }
 
 #Preview {
-    StatisticsSettingsView(coordinator: AppCoordinator(directory: .temporaryDirectory))
+    StatisticsSettingsView(
+        coordinator: AppCoordinator(directory: .temporaryDirectory),
+        navigation: StatsNavigation()
+    )
         .frame(width: Design.settingsPaneWidth, height: Design.settingsHeight)
 }

@@ -24,6 +24,32 @@ public enum NotificationInterval: String, Codable, Sendable, CaseIterable {
     }
 }
 
+/// Menubar sayacının görünümü.
+///
+/// Halka bulunulan saatin ne kadarının dolduğunu gösterir: rakamı okumadan,
+/// göz ucuyla "yeni bir saate geçtim mi" sorusunu cevaplar. Kapsül sayacı
+/// menubar'daki diğer metinlerden ayırır. Düz metin 1.0'ın görünümü.
+public enum MenuBarStyle: String, Codable, Sendable, CaseIterable {
+    case ring
+    case pill
+    case text
+
+    public var displayName: String {
+        switch self {
+        case .ring: "Halka"
+        case .pill: "Kapsül"
+        case .text: "Yalnız metin"
+        }
+    }
+
+    /// Bulunulan saatin dolan kısmı, 0 ile 1 arası. Tam saatte halka
+    /// boşalıp yeniden başlar.
+    public static func hourProgress(_ elapsed: TimeInterval) -> Double {
+        guard elapsed > 0 else { return 0 }
+        return elapsed.truncatingRemainder(dividingBy: 3600) / 3600
+    }
+}
+
 /// Kullanıcı ayarları. `preferences.json` dosyasında saklanır.
 ///
 /// Her alan `decodeIfPresent` ile okunur: ileride yeni bir ayar eklendiğinde
@@ -35,6 +61,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     /// başladığı anda kapatır.
     public var gapThreshold: TimeInterval
     public var notificationInterval: NotificationInterval
+    public var menuBarStyle: MenuBarStyle
 
     /// Ayarlarda sunulan ara eşikleri. "Hemen" yok: ekran kararması da ara
     /// sayıldığı için her bakışını kaçıran kullanıcının oturumu bölünürdü.
@@ -44,12 +71,14 @@ public struct Preferences: Codable, Sendable, Equatable {
         showSeconds: Bool = false,
         showPlaceNameInMenuBar: Bool = true,
         gapThreshold: TimeInterval = 30 * 60,
-        notificationInterval: NotificationInterval = .hourly
+        notificationInterval: NotificationInterval = .hourly,
+        menuBarStyle: MenuBarStyle = .ring
     ) {
         self.showSeconds = showSeconds
         self.showPlaceNameInMenuBar = showPlaceNameInMenuBar
         self.gapThreshold = gapThreshold
         self.notificationInterval = notificationInterval
+        self.menuBarStyle = menuBarStyle
     }
 
     /// Seçenek listesindeki en yakın değer. 1.0'ın serbest uyku eşiği
@@ -59,7 +88,7 @@ public struct Preferences: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case showSeconds, showPlaceNameInMenuBar, gapThreshold, notificationInterval
+        case showSeconds, showPlaceNameInMenuBar, gapThreshold, notificationInterval, menuBarStyle
     }
 
     /// 1.0 bu anahtarları yazıyordu. Ayrı bir anahtar kümesinden okuyoruz ki
@@ -88,7 +117,10 @@ public struct Preferences: Codable, Sendable, Equatable {
             gapThreshold: gap,
             notificationInterval: try container.decodeIfPresent(
                 NotificationInterval.self, forKey: .notificationInterval
-            ) ?? defaults.notificationInterval
+            ) ?? defaults.notificationInterval,
+            menuBarStyle: try container.decodeIfPresent(
+                MenuBarStyle.self, forKey: .menuBarStyle
+            ) ?? defaults.menuBarStyle
         )
     }
 }

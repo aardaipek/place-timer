@@ -11,9 +11,9 @@ public final class AppWindow {
     private var closeObserver: NSObjectProtocol?
     private let title: String
 
-    /// Ayarlar penceresi macOS 26'nın cam kabuğunu alır: tam boy içerik,
-    /// birleşik araç çubuğu ve yüzen kenar çubuğu. Diğer küçük pencereler
-    /// (yer sorusu, ilk açılış) sade kalır.
+    /// Ayarlar penceresi tam boy içerik alır: başlık çubuğu saydam, araç
+    /// çubuğu yok, kabuğu (cam kenar çubuğu, başlık) SwiftUI çiziyor. Diğer
+    /// küçük pencereler (yer sorusu, ilk açılış) sade kalır.
     public enum Style {
         case standard
         case settings
@@ -41,8 +41,12 @@ public final class AppWindow {
 
         let controller = NSHostingController(rootView: content())
         if style == .settings {
-            // SwiftUI'nin `.toolbar` ve `.navigationTitle`'ı pencereye geçsin.
-            controller.sceneBridgingOptions = [.toolbars, .title]
+            // Araç çubuğu köprüsü bilerek kapalı: bölümlerden biri araç
+            // çubuğuna düğme koyunca yalnızca o bölümde başlık çubuğu
+            // kalınlaşıyor, pencere düğmeleri büyüyüp yer değiştiriyordu.
+            // Boyut da sabit: içerik değişince pencere yeniden ölçülmesin.
+            controller.sceneBridgingOptions = []
+            controller.sizingOptions = []
         }
         let window = NSWindow(contentViewController: controller)
         window.title = title
@@ -55,7 +59,9 @@ public final class AppWindow {
             // başlık çubuğunun altına uzandığında çıkıyor.
             window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
-            window.toolbarStyle = .unified
+            window.titleVisibility = .hidden
+            window.toolbar = nil
+            window.isMovableByWindowBackground = true
         }
         window.isReleasedWhenClosed = false
 
@@ -65,7 +71,9 @@ public final class AppWindow {
         // bagli kalip asagi kayiyordu. Olculdu — hicbir sey yapmayan
         // `center()` ile 848,42; ara adimlarla ekranin 15 punto altinda.
         // `frameRect(forContentRect:)` baslik cubugunu icine katiyor.
-        let contentSize = controller.view.fittingSize
+        let contentSize = style == .settings
+            ? NSSize(width: Design.settingsWidth, height: Design.settingsHeight)
+            : controller.view.fittingSize
         if contentSize.width > 0, contentSize.height > 0 {
             window.setFrame(centeredFrame(for: contentSize, of: window), display: false)
         } else {

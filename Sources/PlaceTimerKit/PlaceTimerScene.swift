@@ -21,9 +21,18 @@ public struct PlaceTimerScene: Scene {
             // Etiket `Text` değil, çizilmiş bir görüntü. Nedeni
             // `MenuBarLabel`de yazılı: SwiftUI biçimi menubar öğesine
             // taşımıyor ve başlık her saniye enini değiştiriyordu.
-            Image(nsImage: MenuBarLabel.image(for: menuBarTitle))
+            Image(nsImage: MenuBarLabel.image(
+                for: menuBarTitle,
+                style: menuBarStyle,
+                progress: MenuBarStyle.hourProgress(coordinator.elapsed)
+            ))
         }
         .menuBarExtraStyle(.window)
+    }
+
+    /// İzin uyarısı bir süre değil; ona halka ya da kapsül giydirilmez.
+    private var menuBarStyle: MenuBarStyle {
+        coordinator.needsLocationPermission ? .text : coordinator.preferences.menuBarStyle
     }
 
     private var menuBarTitle: String {
