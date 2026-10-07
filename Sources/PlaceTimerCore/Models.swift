@@ -117,6 +117,9 @@ public enum SessionEvent: Sendable, Equatable {
     case wake
     case sleep
     case placeResolved(PlaceRef)
+    /// Kullanıcı yeri kendisi seçti (panelden, yeni yer sorusundan).
+    /// Otomatik çözümden farkı: kararlılık süresi beklenmez.
+    case placeChosen(UUID)
     /// Saniyede bir; `idleSeconds` son kullanıcı girdisinden bu yana geçen süre.
     case tick(idleSeconds: TimeInterval)
     /// Kullanıcı sayacı elle sıfırladı: oturum kapanır, aynı yerde yenisi açılır.

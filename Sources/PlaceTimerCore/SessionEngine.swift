@@ -27,6 +27,14 @@ public struct SessionEngine: Sendable {
     /// oturum kapandı; ilk girdide yeni oturum açılacak.
     private var isAway = false
 
+    /// Kararlılık süresi dolmamış bir yer değişimi adayı.
+    private struct PendingPlace: Sendable {
+        let placeID: UUID
+        let firstSeenAt: Date
+    }
+
+    private var pendingPlace: PendingPlace?
+
     /// - Parameter restoring: Diskten okunan açık oturum. Uygulama çökse veya
     ///   güncellense bile oturum kaldığı yerden devam eder.
     public init(
@@ -75,7 +83,9 @@ public struct SessionEngine: Sendable {
         case .sleep:
             handleSleep(at: now)
         case .placeResolved(let place):
-            handlePlaceResolved(place, at: now)
+            handlePlaceResolved(place, immediate: false, at: now)
+        case .placeChosen(let placeID):
+            handlePlaceResolved(.known(placeID), immediate: true, at: now)
         case .tick(let idleSeconds):
             handleTick(idleSeconds: idleSeconds, at: now)
         case .endSessionRequested:
@@ -134,41 +144,77 @@ public struct SessionEngine: Sendable {
         isAsleep = true
         if sleepStartedAt == nil { sleepStartedAt = now }
         pendingSleepStart = nil
+        pendingPlace = nil
         return []
     }
 
     private mutating func handlePlaceResolved(
         _ place: PlaceRef,
+        immediate: Bool,
         at now: Date
     ) -> [SessionEffect] {
-        // Yer değişimi uyku sırasında olduysa oturum uykuya dalma anında biter.
-        let closeAt = pendingSleepStart ?? now
+        // Uykudan yeni uyanıldı: yer değiştiyse oturum uykuya dalma anında biter.
+        let closeAtSleep = pendingSleepStart
         pendingSleepStart = nil
 
         switch place {
         case .unknown:
-            // Wi-Fi düştü ya da hiç yok. Oturum kapanmaz, yalnızca adı değişir.
+            // Wi-Fi düştü ya da hiç yok. Oturum kapanmaz, yalnızca adı değişir;
+            // kararlılık adayı da korunur — bilinmeyen an iki yere de yazılmaz.
             currentPlace = .unknown
             return currentSession == nil && !isAway ? startSession(at: now) : []
 
         case .known(let placeID):
-            currentPlace = .known(placeID)
             // Kullanıcı yokken gelen ağ çözümü oturum açmaz; dönüşte açılır.
-            guard !isAway else { return [] }
-
+            guard !isAway else {
+                currentPlace = .known(placeID)
+                return []
+            }
             guard var session = currentSession else {
+                pendingPlace = nil
+                currentPlace = .known(placeID)
                 return startSession(at: now, placeID: placeID)
             }
             if session.placeID == nil || session.placeID == placeID {
                 // "Bilinmeyen yer"de başlamıştı, Wi-Fi geç geldi: aynı oturum.
                 session.placeID = placeID
                 currentSession = session
+                currentPlace = .known(placeID)
+                pendingPlace = nil
                 return []
             }
-            var effects = endSession(at: closeAt)
-            effects += startSession(at: now, placeID: placeID)
-            return effects
+            if let sleptAt = closeAtSleep {
+                return commitPlaceChange(to: placeID, closingAt: sleptAt, startingAt: now)
+            }
+            if immediate {
+                return commitPlaceChange(to: placeID, closingAt: now, startingAt: now)
+            }
+
+            let firstSeen: Date
+            if let pending = pendingPlace, pending.placeID == placeID {
+                firstSeen = pending.firstSeenAt
+            } else {
+                firstSeen = now
+                pendingPlace = PendingPlace(placeID: placeID, firstSeenAt: now)
+            }
+            guard now.timeIntervalSince(firstSeen) >= configuration.placeChangeStability else {
+                return []
+            }
+            // Yeni yerdeki ilk dakikalar kaybolmasın: bölünme ilk gözlem anında.
+            return commitPlaceChange(to: placeID, closingAt: firstSeen, startingAt: firstSeen)
         }
+    }
+
+    private mutating func commitPlaceChange(
+        to placeID: UUID,
+        closingAt closeTime: Date,
+        startingAt startTime: Date
+    ) -> [SessionEffect] {
+        pendingPlace = nil
+        currentPlace = .known(placeID)
+        var effects = endSession(at: closeTime)
+        effects += startSession(at: startTime, placeID: placeID)
+        return effects
     }
 
     private mutating func handleTick(

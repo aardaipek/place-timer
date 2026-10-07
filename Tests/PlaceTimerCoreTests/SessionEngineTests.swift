@@ -107,9 +107,9 @@ struct SessionEngineTests {
         #expect(engine.elapsed(at: at(50)) == 0)
     }
 
-    @Test("Uyanıkken yer değişimi oturumu o an kapatır")
+    @Test("Kararlılık süresi sıfırken uyanıkken yer değişimi oturumu o an kapatır")
     func placeChangeWhileAwakeClosesNow() {
-        var engine = SessionEngine()
+        var engine = SessionEngine(configuration: EngineConfiguration(placeChangeStability: 0))
         engine.handle(.wake, at: at(0))
         engine.handle(.placeResolved(.known(ev)), at: at(0))
 
@@ -184,7 +184,7 @@ struct SessionEngineTests {
 
     @Test("Yeni oturum saat sınırlarını sıfırdan sayar")
     func hourMarksResetWithNewSession() {
-        var engine = SessionEngine()
+        var engine = SessionEngine(configuration: EngineConfiguration(placeChangeStability: 0))
         engine.handle(.wake, at: at(0))
         engine.handle(.placeResolved(.known(ev)), at: at(0))
         engine.handle(.tick(idleSeconds: 0), at: at(60))

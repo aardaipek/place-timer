@@ -273,7 +273,7 @@ public final class AppCoordinator {
         catalog.add(place)
         persistCatalog()
         self.prompt = nil
-        apply(.placeResolved(.known(place.id)))
+        apply(.placeChosen(place.id))
         refreshDisplay()
     }
 
@@ -283,7 +283,7 @@ public final class AppCoordinator {
         catalog.attach(ssid: prompt.ssid, bssid: lastWiFi?.bssid, to: placeID)
         persistCatalog()
         self.prompt = nil
-        apply(.placeResolved(.known(placeID)))
+        apply(.placeChosen(placeID))
         refreshDisplay()
     }
 
@@ -361,7 +361,7 @@ public final class AppCoordinator {
     public func overrideCurrentPlace(_ placeID: UUID) {
         manualSelection = ManualPlaceSelection(placeID: placeID, ssid: lastWiFi?.ssid)
         prompt = nil
-        apply(.placeResolved(.known(placeID)))
+        apply(.placeChosen(placeID))
         refreshDisplay()
     }
 
