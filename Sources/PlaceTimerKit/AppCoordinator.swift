@@ -69,6 +69,8 @@ public final class AppCoordinator {
     private let preferencesStore: JSONFileStore<Preferences>
     private let suggestionStore: JSONFileStore<SuggestionState>
     private var suggestionState = SuggestionState()
+    private let eventLog: EventLog
+    private var lastLoggedResolution: String?
 
     private var ticker: Timer?
     private var ticksSinceNetworkCheck = 0
@@ -99,11 +101,14 @@ public final class AppCoordinator {
             url: base.appendingPathComponent("preferences.json")
         )
         suggestionStore = JSONFileStore(url: base.appendingPathComponent("suggestions.json"))
+        eventLog = EventLog(url: base.appendingPathComponent("events.log"))
     }
 
     // MARK: - Yaşam döngüsü
 
     public func start() async {
+        eventLog.prune()
+        eventLog.record("uygulama açıldı")
         catalog = (try? catalogStore.load()) ?? PlaceCatalog()
         history = (try? historyStore.load()) ?? []
         suggestionState = (try? suggestionStore.load()) ?? SuggestionState()
@@ -129,8 +134,14 @@ public final class AppCoordinator {
         refreshPermissionFlags()
         needsNotificationPermission = await notifier.authorizationStatus() != .authorized
 
-        power.onSleep = { [weak self] in self?.apply(.sleep) }
-        power.onWake = { [weak self] in self?.apply(.wake) }
+        power.onSleep = { [weak self] in
+            self?.eventLog.record("uyku")
+            self?.apply(.sleep)
+        }
+        power.onWake = { [weak self] in
+            self?.eventLog.record("uyanma")
+            self?.apply(.wake)
+        }
         power.start()
 
         if location.isAuthorized { location.startUpdating() }
@@ -197,11 +208,18 @@ public final class AppCoordinator {
         guard location.isAuthorized else { return }
 
         let snapshot = WiFiReader.snapshot()
+        if snapshot != lastWiFi {
+            let accuracy = location.accuracy.map { "±\(Int($0))m" } ?? "konum yok"
+            eventLog.record(
+                "wifi ssid=\(snapshot.ssid ?? "-") bssid=\(snapshot.bssid ?? "-") \(accuracy)", at: now
+            )
+        }
         defer { lastWiFi = snapshot }
 
         // Manuel düzeltme, geçerli olduğu sürece katalog eşleşmesini bastırır.
         if let selection = manualSelection {
             if selection.applies(to: snapshot.ssid) {
+                logResolution("elle seçilmiş", at: now)
                 apply(.placeResolved(.known(selection.placeID)), at: now)
                 return
             }
@@ -214,20 +232,30 @@ public final class AppCoordinator {
                 catalog.attach(ssid: snapshot.ssid ?? "", bssid: bssid, to: place.id)
                 persistCatalog()
             }
+            logResolution("eşleşti \(place.displayName)", at: now)
             prompt = nil
             apply(.placeResolved(.known(place.id)), at: now)
 
         case .noNetwork:
+            logResolution("ağ yok", at: now)
             apply(.placeResolved(.unknown), at: now)
 
         case .possibleBranch(let existing):
+            logResolution("şube olabilir \(existing.displayName)", at: now)
             apply(.placeResolved(.unknown), at: now)
             Task { await askAboutBranch(snapshot: snapshot, existing: existing) }
 
         case .unknownNetwork(let nearby):
+            logResolution("tanınmayan ağ", at: now)
             apply(.placeResolved(.unknown), at: now)
             Task { await askAboutNewNetwork(snapshot: snapshot, nearby: nearby) }
         }
+    }
+
+    private func logResolution(_ text: String, at now: Date) {
+        guard text != lastLoggedResolution else { return }
+        lastLoggedResolution = text
+        eventLog.record("yer \(text)", at: now)
     }
 
     private func apply(_ event: SessionEvent, at now: Date = Date()) {
@@ -246,13 +274,16 @@ public final class AppCoordinator {
         }
         for effect in effects {
             switch effect {
-            case .sessionStarted:
+            case .sessionStarted(let session):
+                eventLog.record("oturum başladı \(session.id.uuidString.prefix(8)) yer=\(placeName(for: session.placeID))")
                 persistState(at: Date())
             case .sessionEnded(let session):
+                eventLog.record("oturum bitti \(session.id.uuidString.prefix(8)) süre=\(DurationFormat.readable(session.elapsed(at: Date())))")
                 history.append(session)
                 persistHistory()
                 refreshSuggestions()
-            case .sessionResumed(_, let replacing):
+            case .sessionResumed(let session, let replacing):
+                eventLog.record("oturum geri açıldı \(session.id.uuidString.prefix(8)) katılan=\(replacing.count - 1)")
                 history.removeAll { replacing.contains($0.id) }
                 persistHistory()
                 persistState(at: Date())
@@ -386,6 +417,7 @@ public final class AppCoordinator {
 
     /// Sayacı sıfırlar: oturumu kapatıp aynı yerde yenisini başlatır.
     public func endCurrentSession() {
+        eventLog.record("kullanıcı sayacı sıfırladı")
         apply(.endSessionRequested)
         refreshDisplay()
     }
@@ -393,6 +425,7 @@ public final class AppCoordinator {
     /// "Burası aslında şurası" düzeltmesi. Seçim, o anki ağa bağlanır ve ağ
     /// değişene kadar otomatik eşleşmeyi bastırır.
     public func overrideCurrentPlace(_ placeID: UUID) {
+        eventLog.record("kullanıcı yeri seçti \(placeName(for: placeID))")
         manualSelection = ManualPlaceSelection(placeID: placeID, ssid: lastWiFi?.ssid)
         prompt = nil
         apply(.placeChosen(placeID))
@@ -439,6 +472,7 @@ public final class AppCoordinator {
         else { return }
 
         catalog.merge(source, into: target)
+        eventLog.record("kullanıcı yer birleştirdi")
         history = SessionHistory.reassign(history, from: source, to: target)
         engine.reassignPlace(from: source, to: target)
         if let selection = manualSelection, selection.placeID == source {
@@ -472,6 +506,7 @@ public final class AppCoordinator {
         guard !removable.isEmpty else { return }
         recordUndo()
         history.removeAll { removable.contains($0.id) }
+        eventLog.record("kullanıcı \(removable.count) oturum sildi")
         commitHistoryEdit()
     }
 
@@ -485,6 +520,7 @@ public final class AppCoordinator {
         case .failure(let error):
             return error
         case .success(let merged):
+            eventLog.record("kullanıcı oturum birleştirdi")
             recordUndo()
             apply(edited: merged)
             return nil
@@ -510,6 +546,7 @@ public final class AppCoordinator {
         case .failure(let error):
             return error
         case .success(let updated):
+            eventLog.record("kullanıcı oturum düzenledi")
             recordUndo()
             apply(edited: updated)
             return nil
@@ -554,6 +591,7 @@ public final class AppCoordinator {
     /// Tercihler kalıyor: onlar kullanıcının nerede olduğunu değil, uygulamayı
     /// nasıl istediğini anlatıyor. Arayüz de bunu böyle söylüyor.
     public func eraseAllData() {
+        eventLog.erase()
         catalog = PlaceCatalog()
         history = []
         manualSelection = nil
@@ -571,6 +609,13 @@ public final class AppCoordinator {
         persistSuggestionState()
         refreshSuggestions()
         refreshDisplay()
+    }
+
+    public func revealEventLog() {
+        if !FileManager.default.fileExists(atPath: eventLog.url.path) {
+            eventLog.record("günlük açıldı")
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([eventLog.url])
     }
 
     // MARK: - İstatistik

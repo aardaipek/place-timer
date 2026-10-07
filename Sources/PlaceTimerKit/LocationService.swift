@@ -12,6 +12,8 @@ import PlaceTimerCore
 public final class LocationService: NSObject, CLLocationManagerDelegate {
     public private(set) var authorizationStatus: CLAuthorizationStatus
     public private(set) var coordinate: Coordinate?
+    /// Son konumun yatay doğruluğu (metre). Olay günlüğü için.
+    public private(set) var accuracy: Double?
 
     public var onAuthorizationChange: ((CLAuthorizationStatus) -> Void)?
 
@@ -98,8 +100,10 @@ public final class LocationService: NSObject, CLLocationManagerDelegate {
             latitude: last.coordinate.latitude,
             longitude: last.coordinate.longitude
         )
+        let accuracy = last.horizontalAccuracy
         MainActor.assumeIsolated {
             self.coordinate = coordinate
+            self.accuracy = accuracy
         }
     }
 
