@@ -118,6 +118,8 @@ notarizasyon icindir — Developer ID ile dagitim yapilmadigi surece gerekmez.)
 
 **1.1.0 (5)** — 7 Ekim 2026: TestFlight'a yüklendi (iç test grubu "Ic Test"). 137 test ve `-warnings-as-errors` derlemesi temiz; Xcode 27.0 ile derlendi.
 
+**1.1.0 (6)** — 7 Ekim 2026: TestFlight'a yüklendi (iç test grubu "Ic Test"). Sabit ayarlar kabuğu ve menubar halka/kapsül görünümü. 141 test ve `-warnings-as-errors` derlemesi temiz.
+
 ## Bilinen kirilganlik
 
 `AppCoordinator.init` veri klasorunu olusturamazsa sessizce
