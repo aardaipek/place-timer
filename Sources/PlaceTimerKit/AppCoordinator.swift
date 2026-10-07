@@ -63,7 +63,25 @@ public final class AppCoordinator {
     private let notifier = Notifier()
     private let power = PowerMonitor()
 
-    private var engine = SessionEngine()
+    /// Motor her saniye tick alıyor; doğrudan gözlenseydi motoru okuyan her
+    /// view (istatistik sayfası bütün geçmişi tarar) saniyede bir yeniden
+    /// çizilirdi. Gözlem yalnızca oturum ya da yer gerçekten değişince
+    /// `engineRevision` üzerinden tetiklenir.
+    @ObservationIgnored private var engineStorage = SessionEngine()
+    private var engineRevision = 0
+
+    private var engine: SessionEngine {
+        get {
+            _ = engineRevision
+            return engineStorage
+        }
+        set {
+            let changed = newValue.currentSession != engineStorage.currentSession
+                || newValue.currentPlace != engineStorage.currentPlace
+            engineStorage = newValue
+            if changed { engineRevision &+= 1 }
+        }
+    }
     private var catalog = PlaceCatalog()
     private var history: [Session] = []
 
@@ -89,6 +107,7 @@ public final class AppCoordinator {
     /// Son elle düzeltmeden önceki hâl. Tek adımlık geri alma yeterli: kullanıcı
     /// bir şeyi yanlış birleştirdiğinde hemen fark eder.
     private var undoSnapshot: (history: [Session], current: Session?)?
+    private var isBatchingSuggestions = false
 
     /// Ağ kaç tick'te bir yoklanır. Wi-Fi değişimi anlık algılanmak zorunda
     /// değil; 10 saniyelik gecikme oturum sınırlarını gözle görülür biçimde
@@ -476,6 +495,9 @@ public final class AppCoordinator {
         else { return }
 
         catalog.merge(source, into: target)
+        // Geri alma eski yer kimliğini geri getirirdi; o yer artık katalogda yok.
+        undoSnapshot = nil
+        canUndo = false
         eventLog.record("kullanıcı yer birleştirdi")
         history = SessionHistory.reassign(history, from: source, to: target)
         engine.reassignPlace(from: source, to: target)
@@ -567,6 +589,7 @@ public final class AppCoordinator {
     }
 
     private func recordUndo() {
+        guard !isBatchingSuggestions else { return }
         undoSnapshot = (history, engine.currentSession)
         canUndo = true
     }
@@ -690,12 +713,28 @@ public final class AppCoordinator {
         refreshSuggestions()
     }
 
+    /// Hepsi tek geri alma adımıdır. Yer birleştirmesi varsa geri alma
+    /// kapanır: geçmişi eski yer kimliğine döndürmek silinmiş yer satırları
+    /// üretirdi.
     public func applyAllSuggestions() {
+        let before = (history: history, current: engine.currentSession)
+        var mergedPlaces = false
+        isBatchingSuggestions = true
         // Her uygulama listeyi yeniden kurar; sınır, uygulanamayan bir öneride
         // sonsuz döngüye karşı.
         for _ in 0..<200 {
             guard let next = suggestions.first else { break }
+            if case .samePlace = next { mergedPlaces = true }
             apply(next)
+        }
+        isBatchingSuggestions = false
+
+        if mergedPlaces {
+            undoSnapshot = nil
+            canUndo = false
+        } else if history != before.history {
+            undoSnapshot = before
+            canUndo = true
         }
     }
 

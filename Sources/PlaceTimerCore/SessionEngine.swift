@@ -23,10 +23,20 @@ public struct SessionEngine: Sendable {
     public private(set) var configuration: EngineConfiguration
 
     private var sleepStartedAt: Date?
-    /// Uyandıktan sonraki ilk yer çözümlemesine kadar taşınır. Yer uyku
-    /// sırasında değiştiyse eski oturum uyanma anında değil, uykuya dalma
-    /// anında kapanmalı — yoksa yolda geçen süre yeni yerin hanesine yazılır.
-    private var pendingSleepStart: Date?
+    /// Kısa bir uykudan sonra, ilk bilinen yer çözümüne kadar taşınır. Yer uyku
+    /// sırasında değiştiyse eski oturum uykuya dalma anında kapanmalı, yenisi
+    /// uyanışta başlamalı — yoksa yolda geçen süre bir yerin hanesine yazılır.
+    /// Wi-Fi'nin geç gelmesi (`.unknown`) bunu tüketmez; ara eşiği kadar
+    /// beklenir, sonrasında yer değişimi uyanıkken olmuş sayılır.
+    private struct PendingWake: Sendable, Equatable {
+        let sleptAt: Date
+        let wokeAt: Date
+    }
+
+    private var pendingWake: PendingWake?
+    /// Son kullanıcı girdisinin anı. Hareketsizliğin ardından gelen uyku tek
+    /// bir ara sayılsın diye uyku bu andan ölçülür.
+    private var lastInputAt: Date?
     /// Uyanık bir Mac'te kullanıcı ara eşiğinden uzun süre dokunmadığı için
     /// oturum kapandı; ilk girdide yeni oturum açılacak.
     private var isAway = false
@@ -134,6 +144,8 @@ public struct SessionEngine: Sendable {
     private mutating func handleWake(at now: Date) -> [SessionEffect] {
         isAsleep = false
         isAway = false
+        // Uykudan önceki girdi artık geçerli değil; ilk tick yenisini yazar.
+        lastInputAt = nil
 
         guard let sleptAt = sleepStartedAt else {
             // Uykudan değil, soğuk başlangıçtan geliyoruz.
@@ -143,12 +155,15 @@ public struct SessionEngine: Sendable {
 
         if now.timeIntervalSince(sleptAt) > configuration.gapThreshold {
             var effects = endSession(at: sleptAt)
+            // Uzun aradan sonra nerede uyanıldığı bilinmiyor: yeni oturum yersiz
+            // başlar ve ilk çözülen yeri beklemeden alır.
+            currentPlace = .unknown
             effects += startSession(at: now)
             return effects
         }
 
         // Kısa ara: oturum sürüyor, ama yerin değişmediğini henüz bilmiyoruz.
-        pendingSleepStart = sleptAt
+        pendingWake = PendingWake(sleptAt: sleptAt, wokeAt: now)
         return currentSession == nil ? startSession(at: now) : []
     }
 
@@ -169,8 +184,11 @@ public struct SessionEngine: Sendable {
     /// başladığı yerden ölçülür.
     private mutating func handleSleep(at now: Date) -> [SessionEffect] {
         isAsleep = true
-        if sleepStartedAt == nil { sleepStartedAt = now }
-        pendingSleepStart = nil
+        if sleepStartedAt == nil {
+            // Uykudan önce zaten dokunulmuyorduysa ara o anda başlamıştı.
+            sleepStartedAt = min(now, lastInputAt ?? now)
+        }
+        pendingWake = nil
         pendingPlace = nil
         return []
     }
@@ -180,9 +198,9 @@ public struct SessionEngine: Sendable {
         immediate: Bool,
         at now: Date
     ) -> [SessionEffect] {
-        // Uykudan yeni uyanıldı: yer değiştiyse oturum uykuya dalma anında biter.
-        let closeAtSleep = pendingSleepStart
-        pendingSleepStart = nil
+        if let wake = pendingWake, now.timeIntervalSince(wake.wokeAt) > configuration.gapThreshold {
+            pendingWake = nil
+        }
 
         switch place {
         case .unknown:
@@ -193,6 +211,9 @@ public struct SessionEngine: Sendable {
 
         case .known(let placeID):
             // Kullanıcı yokken gelen ağ çözümü oturum açmaz; dönüşte açılır.
+            // Uykudan sonraki ilk bilinen yer: kısa uyku penceresi kapanır.
+            let wake = pendingWake
+            pendingWake = nil
             guard !isAway else {
                 currentPlace = .known(placeID)
                 return []
@@ -210,8 +231,8 @@ public struct SessionEngine: Sendable {
                 pendingPlace = nil
                 return []
             }
-            if let sleptAt = closeAtSleep {
-                return commitPlaceChange(to: placeID, closingAt: sleptAt, startingAt: now)
+            if let wake {
+                return commitPlaceChange(to: placeID, closingAt: wake.sleptAt, startingAt: wake.wokeAt)
             }
             if immediate || isReturnToPrevious(placeID, at: now) {
                 return commitPlaceChange(to: placeID, closingAt: now, startingAt: now)
@@ -249,6 +270,7 @@ public struct SessionEngine: Sendable {
         at now: Date
     ) -> [SessionEffect] {
         guard !isAsleep else { return [] }
+        lastInputAt = now.addingTimeInterval(-idleSeconds)
 
         if isAway {
             guard idleSeconds < configuration.gapThreshold else { return [] }
@@ -296,6 +318,8 @@ public struct SessionEngine: Sendable {
     }
 
     private mutating func startSession(at now: Date, placeID: UUID? = nil) -> [SessionEffect] {
+        // Önceki oturumdan kalan yer adayı yeni oturumu geriye tarihleyemez.
+        pendingPlace = nil
         let resolved = placeID ?? knownCurrentPlaceID
 
         if let match = resumable(placeID: resolved, at: now) {
@@ -316,6 +340,7 @@ public struct SessionEngine: Sendable {
         guard var session = currentSession else { return [] }
         session.endedAt = max(session.startedAt, time)
         currentSession = nil
+        pendingPlace = nil
         recentlyEnded.append(session)
         if recentlyEnded.count > 2 {
             recentlyEnded.removeFirst(recentlyEnded.count - 2)

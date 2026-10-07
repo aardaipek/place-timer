@@ -17,6 +17,9 @@ struct StatisticsSettingsView: View {
     @State private var selection: Set<UUID> = []
     @State private var editing: Session?
     @State private var exporting = false
+    /// Dışa aktarma anında üretilir; gövdede kurulsaydı her çizimde bütün
+    /// dönemin CSV'si yeniden yazılırdı.
+    @State private var exportDocument: CSVDocument?
     @State private var editError: SessionHistory.EditError?
     @State private var showsEditError = false
 
@@ -106,6 +109,10 @@ struct StatisticsSettingsView: View {
             coordinator.deleteSessions(selection)
             selection = []
         }
+        .onChange(of: period) {
+            // Görünmeyen satırlar ⌫ ile silinmesin.
+            selection = []
+        }
         .onChange(of: scope) { _, yeni in
             period = .containing(Date(), scope: yeni)
         }
@@ -115,7 +122,7 @@ struct StatisticsSettingsView: View {
         }
         .fileExporter(
             isPresented: $exporting,
-            document: CSVDocument(text: coordinator.csv(in: period)),
+            document: exportDocument,
             contentType: .commaSeparatedText,
             defaultFilename: "PlaceTimer \(period.title(now: Date()))"
         ) { _ in }
@@ -168,6 +175,7 @@ struct StatisticsSettingsView: View {
                 .keyboardShortcut("z")
                 .disabled(!coordinator.canUndo)
             Button("Dışa aktar…", systemImage: "square.and.arrow.up") {
+                exportDocument = CSVDocument(text: coordinator.csv(in: period))
                 exporting = true
             }
         }

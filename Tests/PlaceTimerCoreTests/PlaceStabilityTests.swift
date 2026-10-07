@@ -104,7 +104,9 @@ struct PlaceStabilityTests {
             return
         }
         #expect(ended.endedAt == at(10))
-        #expect(started.startedAt == at(20.1))
+        // Yeni yer uyanışta başlar; Wi-Fi'nin çözülmesini beklemek yeni yerdeki
+        // ilk anları kaybettirirdi.
+        #expect(started.startedAt == at(20))
     }
 
     @Test("Kullanıcı yokken gelen ağ çözümü oturum açmaz")
