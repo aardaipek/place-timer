@@ -29,7 +29,7 @@ struct PanelSummaryView: View {
                 if let started = coordinator.sessionStartedAt {
                     LabeledContent(
                         "Başlangıç",
-                        value: started.formatted(date: .omitted, time: .shortened)
+                        value: DurationFormat.time(started)
                     )
                 }
                 LabeledContent(

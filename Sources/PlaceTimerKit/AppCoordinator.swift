@@ -43,6 +43,10 @@ public final class AppCoordinator {
     public private(set) var preferences = Preferences()
     public private(set) var todaySegments: [DaySegment] = []
     public private(set) var todayHereSeconds: TimeInterval = 0
+    public private(set) var todayTotalSeconds: TimeInterval = 0
+    /// Bugün kaç farklı yerde bulunuldu; tek yerse panel "Bugün burada"yı
+    /// "Bugün toplam"ın tekrarı olarak göstermez.
+    public private(set) var placesTodayCount: Int = 0
 
     public var currentPlaceID: UUID? { engine.currentSession?.placeID }
     public var sessionStartedAt: Date? { engine.currentSession?.startedAt }
@@ -421,11 +425,6 @@ public final class AppCoordinator {
 
     // MARK: - Oturum düzeltmeleri
 
-    /// Aralığa düşen oturumlar, en yenisi başta; açık oturum da dahil.
-    public func sessions(for range: StatsRange) -> [Session] {
-        sessionsIn(range, from: allSessions, now: Date())
-    }
-
     /// Süren oturum; listede silinemez olarak işaretlenir.
     public var currentSessionID: UUID? { engine.currentSession?.id }
 
@@ -467,8 +466,32 @@ public final class AppCoordinator {
 
     // MARK: - İstatistik
 
-    public func totals(for range: StatsRange) -> [PlaceTotal] {
-        placeTotals(from: allSessions, range: range, now: Date())
+    public func totals(in period: StatsPeriod) -> [PlaceTotal] {
+        placeTotals(from: allSessions, in: period, now: Date())
+    }
+
+    public func totalSeconds(in period: StatsPeriod) -> TimeInterval {
+        PlaceTimerCore.totalSeconds(from: allSessions, in: period.interval, now: Date())
+    }
+
+    public func previousTotalSeconds(for period: StatsPeriod) -> TimeInterval {
+        previousComparableTotal(from: allSessions, for: period, now: Date())
+    }
+
+    public func dailyTotals(in period: StatsPeriod) -> [DayTotal] {
+        PlaceTimerCore.dailyTotals(from: allSessions, in: period, now: Date())
+    }
+
+    public func sessionDays(in period: StatsPeriod) -> [SessionDay] {
+        PlaceTimerCore.sessionDays(from: allSessions, in: period, now: Date())
+    }
+
+    public func segments(on day: Date) -> [DaySegment] {
+        daySegments(from: allSessions, on: day, now: Date())
+    }
+
+    public func csv(in period: StatsPeriod) -> String {
+        sessionsCSV(allSessions, in: period, now: Date()) { placeName(for: $0) }
     }
 
     /// Geçmiş ve açık oturum birlikte; istatistik ikisini de saymalı.
@@ -501,8 +524,12 @@ public final class AppCoordinator {
         elapsed = engine.elapsed(at: now)
         placeName = placeName(for: engine.currentSession?.placeID)
 
-        todaySegments = daySegments(from: allSessions, on: now)
-        todayHereSeconds = placeTotals(from: allSessions, range: .today, now: now)
+        let today = StatsPeriod.containing(now, scope: .day)
+        let todayTotals = placeTotals(from: allSessions, in: today, now: now)
+        todaySegments = daySegments(from: allSessions, on: now, now: now)
+        todayTotalSeconds = todayTotals.reduce(0) { $0 + $1.totalSeconds }
+        placesTodayCount = todayTotals.count
+        todayHereSeconds = todayTotals
             .first { $0.placeID == engine.currentSession?.placeID }?
             .totalSeconds ?? 0
     }

@@ -206,7 +206,7 @@ struct SessionsInRangeTests {
             endedAt: at(0).addingTimeInterval(-47 * 3600)
         )
 
-        let sonuc = sessionsIn(.today, from: bugun + [dun], now: at(180))
+        let sonuc = sessionsOverlapping(bugun + [dun], interval: StatsPeriod.containing(at(180), scope: .day).interval, now: at(180))
 
         #expect(sonuc.count == 3)
         #expect(sonuc.map(\.startedAt) == [at(120), at(60), at(0)])
@@ -219,6 +219,6 @@ struct SessionsInRangeTests {
             startedAt: at(0).addingTimeInterval(-90 * 86400),
             endedAt: at(0).addingTimeInterval(-90 * 86400 + 600)
         )
-        #expect(sessionsIn(.today, from: [uzak], now: at(0)).isEmpty)
+        #expect(sessionsOverlapping([uzak], interval: StatsPeriod.containing(at(0), scope: .day).interval, now: at(0)).isEmpty)
     }
 }

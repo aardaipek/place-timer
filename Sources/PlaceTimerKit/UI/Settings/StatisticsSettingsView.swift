@@ -14,21 +14,22 @@ import SwiftUI
 /// çıkan oturum buradan siliniyor.
 struct StatisticsSettingsView: View {
     @Bindable var coordinator: AppCoordinator
-    @State private var range: StatsRange = .week
+    @State private var scope: StatsScope = .week
+    private var period: StatsPeriod { .containing(Date(), scope: scope) }
 
     /// `placeTotals` süreye göre azalan sıralı döner; en uzun ilk satırdır ve
     /// çubukların ölçeği ona göre kurulur.
-    private var totals: [PlaceTotal] { coordinator.totals(for: range) }
+    private var totals: [PlaceTotal] { coordinator.totals(in: period) }
     private var enUzun: TimeInterval { totals.first?.totalSeconds ?? 0 }
     private var toplam: TimeInterval { totals.reduce(0) { $0 + $1.totalSeconds } }
 
-    private var sessions: [Session] { coordinator.sessions(for: range) }
+    private var sessions: [Session] { coordinator.sessionDays(in: period).flatMap(\.sessions) }
 
     var body: some View {
         Form {
             Section {
-                Picker("Aralık", selection: $range) {
-                    ForEach(StatsRange.allCases, id: \.self) {
+                Picker("Aralık", selection: $scope) {
+                    ForEach(StatsScope.allCases, id: \.self) {
                         Text($0.displayName).tag($0)
                     }
                 }
@@ -105,8 +106,7 @@ struct StatisticsSettingsView: View {
                 .accessibilityHidden(true)
 
             Text(
-                "Aktif \(DurationFormat.readable(total.activeSeconds))"
-                    + " · \(total.sessionCount) oturum"
+                "\(total.sessionCount) oturum"
             )
             .font(.caption)
             .foregroundStyle(.secondary)

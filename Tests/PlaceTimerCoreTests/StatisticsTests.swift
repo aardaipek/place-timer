@@ -7,178 +7,213 @@ private let kafe = UUID()
 
 /// Testlerin makinenin bölgesel ayarlarından etkilenmemesi için sabit takvim.
 private var takvim: Calendar {
-    var calendar = Calendar(identifier: .gregorian)
+    var calendar = Calendar.placeTimer
     calendar.timeZone = TimeZone(identifier: "Europe/Istanbul")!
-    calendar.firstWeekday = 2   // Pazartesi
     return calendar
 }
 
 private func gun(_ day: Int, _ hour: Int, _ minute: Int = 0, month: Int = 9) -> Date {
-    takvim.date(
-        from: DateComponents(
-            year: 2026, month: month, day: day, hour: hour, minute: minute
-        )
-    )!
+    takvim.date(from: DateComponents(year: 2026, month: month, day: day, hour: hour, minute: minute))!
 }
 
-private func oturum(
-    _ placeID: UUID?,
-    from start: Date,
-    to end: Date?,
-    active: TimeInterval = 0
-) -> Session {
-    Session(placeID: placeID, startedAt: start, endedAt: end, activeSeconds: active)
+private func oturum(_ placeID: UUID?, from start: Date, to end: Date?) -> Session {
+    Session(placeID: placeID, startedAt: start, endedAt: end)
 }
 
-@Suite("Yer toplamları")
-struct PlaceTotalsTests {
+private func hafta(_ date: Date) -> StatsPeriod {
+    .containing(date, scope: .week, calendar: takvim)
+}
 
-    private let simdi = gun(9, 15)
+@Suite("İstatistik dönemi")
+struct StatsPeriodTests {
 
-    // 9 Eylul 2026 Carsamba; takvim haftasi Pazartesi 7'sinde basliyor.
-    private var oturumlar: [Session] {
-        [
-            oturum(ev, from: gun(9, 9), to: gun(9, 11), active: 3600),    // bugun 2sa
-            oturum(kafe, from: gun(9, 12), to: gun(9, 14), active: 5400), // bugun 2sa
-            oturum(ev, from: gun(7, 9), to: gun(7, 13), active: 7200),    // Pzt, bu hafta 4sa
-            oturum(ev, from: gun(2, 9), to: gun(2, 12), active: 3600),    // gecen hafta, bu ay 3sa
-            oturum(kafe, from: gun(28, 9, month: 8), to: gun(28, 12, month: 8)), // gecen ay
-        ]
+    @Test("Hafta pazartesi başlar, sistem bölgesinden bağımsız")
+    func weekStartsMonday() {
+        // 20 Eylül 2026 pazar; hafta 14 Eylül pazartesi başlamalı.
+        let period = hafta(gun(20, 12))
+        #expect(period.interval.start == gun(14, 0))
+        #expect(period.interval.end == gun(21, 0))
     }
 
-    @Test("Bugün yalnızca bugünün oturumlarını sayar")
-    func todayOnly() {
-        let toplamlar = placeTotals(
-            from: oturumlar, range: .today, now: simdi, calendar: takvim
-        )
-
-        #expect(toplamlar.count == 2)
-        #expect(toplamlar.first { $0.placeID == ev }?.totalSeconds == 2.0 * 3600)
-        #expect(toplamlar.first { $0.placeID == kafe }?.totalSeconds == 2.0 * 3600)
+    @Test("Varsayılan takvim de pazartesi başlar")
+    func defaultCalendarStartsMonday() {
+        #expect(Calendar.placeTimer.firstWeekday == 2)
     }
 
-    @Test("Hafta takvim haftasıdır, kayan 7 gün değil")
-    func weekIsCalendarWeek() {
-        let toplamlar = placeTotals(
-            from: oturumlar, range: .week, now: simdi, calendar: takvim
-        )
-
-        // Pazartesi 7 + Carsamba 9 = 6 saat ev; 2 eylul haftaya girmez.
-        #expect(toplamlar.first { $0.placeID == ev }?.totalSeconds == 6.0 * 3600)
-        #expect(toplamlar.first { $0.placeID == ev }?.sessionCount == 2)
+    @Test("Önceki ve sonraki dönem")
+    func shifting() {
+        let period = hafta(gun(16, 12))
+        #expect(period.shifted(by: -1, calendar: takvim) == hafta(gun(9, 12)))
+        #expect(period.shifted(by: 1, calendar: takvim) == hafta(gun(23, 12)))
     }
 
-    @Test("Ay takvim ayıdır")
-    func monthIsCalendarMonth() {
-        let toplamlar = placeTotals(
-            from: oturumlar, range: .month, now: simdi, calendar: takvim
-        )
+    @Test("Başlıklar bugüne göre adlandırılır")
+    func titles() {
+        let simdi = gun(16, 12)
+        let gunDonemi = StatsPeriod.containing(simdi, scope: .day, calendar: takvim)
+        #expect(gunDonemi.title(now: simdi, calendar: takvim) == "Bugün")
+        #expect(gunDonemi.shifted(by: -1, calendar: takvim).title(now: simdi, calendar: takvim) == "Dün")
+        #expect(hafta(simdi).title(now: simdi, calendar: takvim) == "Bu hafta")
+        #expect(hafta(simdi).shifted(by: -1, calendar: takvim).title(now: simdi, calendar: takvim) == "Geçen hafta")
+        let ay = StatsPeriod.containing(simdi, scope: .month, calendar: takvim)
+        #expect(ay.title(now: simdi, calendar: takvim) == "Bu ay")
+        #expect(ay.shifted(by: -1, calendar: takvim).title(now: simdi, calendar: takvim) == "Geçen ay")
+        #expect(ay.shifted(by: -2, calendar: takvim).title(now: simdi, calendar: takvim).contains("Temmuz"))
+    }
+}
 
-        #expect(toplamlar.first { $0.placeID == ev }?.totalSeconds == 9.0 * 3600)
-        // 28 agustos eylul ayina girmez.
-        #expect(toplamlar.first { $0.placeID == kafe }?.totalSeconds == 2.0 * 3600)
+@Suite("Kırpma ve toplamlar")
+struct TotalsTests {
+
+    @Test("Geceyi aşan oturum iki güne bölünür")
+    func midnightSplit() {
+        let gece = [oturum(ev, from: gun(16, 23), to: gun(17, 1))]
+        let gunler = dailyTotals(from: gece, in: hafta(gun(16, 12)), now: gun(18, 12), calendar: takvim)
+
+        #expect(gunler.first { $0.day == gun(16, 0) }?.total == 3600)
+        #expect(gunler.first { $0.day == gun(17, 0) }?.total == 3600)
+
+        let carsamba = StatsPeriod.containing(gun(16, 12), scope: .day, calendar: takvim)
+        #expect(placeTotals(from: gece, in: carsamba, now: gun(18, 12)).first?.totalSeconds == 3600)
     }
 
-    @Test("Toplam süreye göre azalan sıralanır")
-    func sortedDescending() {
-        let uzun = oturum(kafe, from: gun(9, 8), to: gun(9, 14))
-        let kisa = oturum(ev, from: gun(9, 15), to: gun(9, 16))
-
-        let toplamlar = placeTotals(
-            from: [kisa, uzun], range: .today, now: simdi, calendar: takvim
-        )
-
-        #expect(toplamlar.map(\.placeID) == [kafe, ev])
+    @Test("Hafta sınırını aşan oturum iki haftaya bölünür")
+    func weekBoundarySplit() {
+        let gece = [oturum(ev, from: gun(20, 23), to: gun(21, 2))]
+        let simdi = gun(22, 12)
+        #expect(totalSeconds(from: gece, in: hafta(gun(20, 12)).interval, now: simdi) == 3600)
+        #expect(totalSeconds(from: gece, in: hafta(gun(21, 12)).interval, now: simdi) == 2 * 3600)
     }
 
     @Test("Açık oturum şu ana kadar sayılır")
     func openSessionCountsUntilNow() {
-        let acik = oturum(kafe, from: gun(9, 14), to: nil)
-
-        let toplamlar = placeTotals(
-            from: [acik], range: .today, now: simdi, calendar: takvim
-        )
-
-        #expect(toplamlar.first?.totalSeconds == 3600)
+        let acik = [oturum(ev, from: gun(16, 9), to: nil)]
+        let bugun = StatsPeriod.containing(gun(16, 12), scope: .day, calendar: takvim)
+        #expect(placeTotals(from: acik, in: bugun, now: gun(16, 12)).first?.totalSeconds == 10800)
     }
 
-    @Test("Aktif süre ayrı toplanır")
-    func activeSecondsAccumulate() {
-        let toplamlar = placeTotals(
-            from: oturumlar, range: .today, now: simdi, calendar: takvim
-        )
-
-        #expect(toplamlar.first { $0.placeID == ev }?.activeSeconds == 3600)
-        #expect(toplamlar.first { $0.placeID == kafe }?.activeSeconds == 5400)
+    @Test("Yerler toplam süreye göre azalan sıralanır, oturum sayısı tutulur")
+    func placeTotalsSorted() {
+        let oturumlar = [
+            oturum(ev, from: gun(16, 9), to: gun(16, 10)),
+            oturum(kafe, from: gun(16, 11), to: gun(16, 14)),
+            oturum(ev, from: gun(16, 15), to: gun(16, 16)),
+        ]
+        let bugun = StatsPeriod.containing(gun(16, 12), scope: .day, calendar: takvim)
+        let toplamlar = placeTotals(from: oturumlar, in: bugun, now: gun(16, 20))
+        #expect(toplamlar.map(\.placeID) == [kafe, ev])
+        #expect(toplamlar.last?.sessionCount == 2)
     }
 
-    @Test("Oturum yoksa liste boş döner")
-    func emptyWhenNoSessions() {
-        #expect(
-            placeTotals(from: [], range: .today, now: simdi, calendar: takvim).isEmpty
+    @Test("Karşılaştırma önceki dönemin aynı anına kadar yapılır")
+    func comparisonUsesSamePortion() {
+        let oturumlar = [
+            oturum(ev, from: gun(7, 9), to: gun(7, 11)),    // geçen pzt 2sa
+            oturum(ev, from: gun(11, 9), to: gun(11, 12)),  // geçen cuma 3sa
+        ]
+        // Bu hafta çarşamba öğlen: geçen haftanın çarşamba öğlenine kadarı.
+        let simdi = gun(16, 12)
+        #expect(previousComparableTotal(from: oturumlar, for: hafta(simdi), now: simdi, calendar: takvim) == 2 * 3600)
+    }
+
+    @Test("Bitmiş dönem önceki dönemin tamamıyla karşılaştırılır")
+    func finishedPeriodComparesWhole() {
+        let oturumlar = [
+            oturum(ev, from: gun(7, 9), to: gun(7, 11)),    // 7–13 Eyl haftası: 2sa
+            oturum(ev, from: gun(11, 9), to: gun(11, 12)),  // aynı hafta: 3sa
+        ]
+        // 14–20 Eyl haftası bitmiş (şimdi 28 Eyl); öncesi bütünüyle 5sa.
+        let bitmis = hafta(gun(16, 12))
+        #expect(previousComparableTotal(from: oturumlar, for: bitmis, now: gun(28, 12), calendar: takvim) == 5 * 3600)
+    }
+
+    @Test("Gün listesi en yeni gün başta, boş gün yok")
+    func sessionDaysNewestFirst() {
+        let oturumlar = [
+            oturum(ev, from: gun(14, 9), to: gun(14, 10)),
+            oturum(kafe, from: gun(16, 9), to: gun(16, 10)),
+            oturum(ev, from: gun(16, 11), to: gun(16, 12)),
+        ]
+        let gunler = sessionDays(from: oturumlar, in: hafta(gun(16, 12)), now: gun(16, 20), calendar: takvim)
+        #expect(gunler.map(\.day) == [gun(16, 0), gun(14, 0)])
+        #expect(gunler.first?.sessions.map(\.startedAt) == [gun(16, 11), gun(16, 9)])
+        #expect(gunler.first?.placeCount == 2)
+        #expect(gunler.first?.total == 7200)
+    }
+
+    @Test("Ayın günleri yaz saati geçişinde de doğru sayılır")
+    func monthDaysAcrossDST() {
+        var berlin = Calendar.placeTimer
+        berlin.timeZone = TimeZone(identifier: "Europe/Berlin")!
+        let ekim = StatsPeriod.containing(
+            berlin.date(from: DateComponents(year: 2026, month: 10, day: 10))!,
+            scope: .month, calendar: berlin
         )
+        #expect(dailyTotals(from: [], in: ekim, now: Date(), calendar: berlin).count == 31)
+    }
+
+    @Test("Veri yokken her şey boş döner")
+    func emptyInputs() {
+        let period = hafta(gun(16, 12))
+        #expect(placeTotals(from: [], in: period, now: gun(16, 12)).isEmpty)
+        #expect(sessionDays(from: [], in: period, now: gun(16, 12), calendar: takvim).isEmpty)
+        #expect(dailyTotals(from: [], in: period, now: gun(16, 12), calendar: takvim).allSatisfy { $0.total == 0 })
     }
 }
 
 @Suite("Gün şeridi")
-struct DaySegmentsTests {
+struct DaySegmentTests {
 
-    @Test("Segmentler oturumları izler, boşluklar segment üretmez")
-    func gapsProduceNoSegments() {
+    @Test("Segmentler güne kırpılır ve sıralıdır")
+    func clippedAndSorted() {
         let oturumlar = [
-            oturum(ev, from: gun(9, 9), to: gun(9, 11)),
-            oturum(kafe, from: gun(9, 13), to: gun(9, 15)),
+            oturum(kafe, from: gun(16, 12), to: gun(16, 14)),
+            oturum(ev, from: gun(15, 22), to: gun(16, 2)),
+            oturum(ev, from: gun(17, 9), to: gun(17, 10)),
         ]
-
-        let segmentler = daySegments(from: oturumlar, on: gun(9, 16), calendar: takvim)
-
-        // 11:00-13:00 arasi bosluk; ucuncu bir segment olusmaz.
+        let segmentler = daySegments(from: oturumlar, on: gun(16, 12), now: gun(16, 20), calendar: takvim)
         #expect(segmentler.count == 2)
-        #expect(segmentler[0].placeID == ev)
-        #expect(segmentler[0].start == gun(9, 9))
-        #expect(segmentler[0].end == gun(9, 11))
-        #expect(segmentler[1].start == gun(9, 13))
-    }
-
-    @Test("Başka günün oturumları girmez")
-    func otherDaysExcluded() {
-        let oturumlar = [
-            oturum(ev, from: gun(8, 9), to: gun(8, 17)),
-            oturum(kafe, from: gun(9, 10), to: gun(9, 12)),
-        ]
-
-        let segmentler = daySegments(from: oturumlar, on: gun(9, 16), calendar: takvim)
-
-        #expect(segmentler.count == 1)
-        #expect(segmentler[0].placeID == kafe)
+        #expect(segmentler.first?.start == gun(16, 0))
+        #expect(segmentler.first?.end == gun(16, 2))
+        #expect(segmentler.last?.placeID == kafe)
     }
 
     @Test("Açık oturum şu ana kadar uzanır")
-    func openSegmentEndsNow() {
-        let simdi = gun(9, 16)
-        let segmentler = daySegments(
-            from: [oturum(kafe, from: gun(9, 14), to: nil)],
-            on: simdi,
-            calendar: takvim
-        )
-
-        #expect(segmentler.first?.end == simdi)
-    }
-
-    @Test("Zamana göre sıralı döner")
-    func sortedByTime() {
-        let oturumlar = [
-            oturum(kafe, from: gun(9, 13), to: gun(9, 15)),
-            oturum(ev, from: gun(9, 9), to: gun(9, 11)),
-        ]
-
-        let segmentler = daySegments(from: oturumlar, on: gun(9, 16), calendar: takvim)
-
-        #expect(segmentler.map(\.placeID) == [ev, kafe])
+    func openSessionExtendsToNow() {
+        let acik = [oturum(ev, from: gun(16, 9), to: nil)]
+        let segmentler = daySegments(from: acik, on: gun(16, 12), now: gun(16, 12), calendar: takvim)
+        #expect(segmentler.first?.end == gun(16, 12))
     }
 
     @Test("Boş günde segment yoktur")
     func emptyDay() {
-        #expect(daySegments(from: [], on: gun(9, 16), calendar: takvim).isEmpty)
+        #expect(daySegments(from: [], on: gun(16, 12), now: gun(16, 12), calendar: takvim).isEmpty)
+    }
+}
+
+@Suite("CSV")
+struct CSVTests {
+
+    @Test("Dönemin oturumları kırpılmış süreyle yazılır")
+    func csvRows() {
+        let oturumlar = [
+            oturum(ev, from: gun(16, 9), to: gun(16, 10, 30)),
+            oturum(kafe, from: gun(20, 23), to: gun(21, 1)),
+        ]
+        let csv = sessionsCSV(
+            oturumlar, in: hafta(gun(16, 12)), now: gun(22, 12),
+            timeZone: TimeZone(identifier: "Europe/Istanbul")!
+        ) { $0 == ev ? "Ev, \"merkez\"" : "Kafe" }
+
+        let satirlar = csv.split(separator: "\n").map(String.init)
+        #expect(satirlar.first == "başlangıç,bitiş,süre_dk,yer")
+        #expect(satirlar[1] == #"2026-09-16 09:00,2026-09-16 10:30,90,"Ev, ""merkez""""#)
+        #expect(satirlar[2] == "2026-09-20 23:00,2026-09-21 01:00,60,Kafe")
+    }
+
+    @Test("Oturum yoksa yalnızca başlık yazılır")
+    func emptyCSV() {
+        let csv = sessionsCSV([], in: hafta(gun(16, 12)), now: gun(16, 12), timeZone: .current) { _ in "" }
+        #expect(csv == "başlangıç,bitiş,süre_dk,yer\n")
     }
 }
