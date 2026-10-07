@@ -130,6 +130,10 @@ public enum SessionEvent: Sendable, Equatable {
 public enum SessionEffect: Sendable, Equatable {
     case sessionStarted(Session)
     case sessionEnded(Session)
+    /// Kapanmış bir oturum geri açıldı. `replacing`, geçmişten çıkarılması
+    /// gereken oturum kimlikleri: geri açılanın kendisi ve ona katılan kısa
+    /// ara oturum.
+    case sessionResumed(Session, replacing: [UUID])
     /// `index` kaçıncı aralık, `elapsed` o anda yerde geçen toplam süre.
     /// Bildirim metni süreyi yazacağı için ham indeksi tek başına taşımak yetmez.
     case markReached(index: Int, elapsed: TimeInterval, placeID: UUID?)

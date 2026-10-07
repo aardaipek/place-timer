@@ -13,6 +13,10 @@ import Foundation
 /// kullanıcı bilgisayarın başında değildir ama işin içindedir.
 public struct SessionEngine: Sendable {
     public private(set) var currentSession: Session?
+    /// Son kapanan en fazla iki oturum, eskisi başta. Aynı yere eşik içinde
+    /// dönüldüğünde geri açmanın dayanağı; uygulama yeniden başlasa da
+    /// çalışsın diye `AppState`'e yazılır.
+    public private(set) var recentlyEnded: [Session]
     public private(set) var currentPlace: PlaceRef
     public private(set) var isAsleep: Bool
 
@@ -35,14 +39,18 @@ public struct SessionEngine: Sendable {
 
     private var pendingPlace: PendingPlace?
 
-    /// - Parameter restoring: Diskten okunan açık oturum. Uygulama çökse veya
-    ///   güncellense bile oturum kaldığı yerden devam eder.
+    /// - Parameters:
+    ///   - restoring: Diskten okunan açık oturum. Uygulama çökse veya
+    ///     güncellense bile oturum kaldığı yerden devam eder.
+    ///   - recentlyEnded: Diskten okunan son kapanan oturumlar.
     public init(
         configuration: EngineConfiguration = EngineConfiguration(),
-        restoring session: Session? = nil
+        restoring session: Session? = nil,
+        recentlyEnded: [Session] = []
     ) {
         self.configuration = configuration
         self.currentSession = session
+        self.recentlyEnded = recentlyEnded
         self.currentPlace = session?.placeID.map { PlaceRef.known($0) } ?? .unknown
         self.isAsleep = false
     }
@@ -104,6 +112,16 @@ public struct SessionEngine: Sendable {
         guard source != target else { return }
         if currentSession?.placeID == source { currentSession?.placeID = target }
         if currentPlace == .known(source) { currentPlace = .known(target) }
+        for index in recentlyEnded.indices where recentlyEnded[index].placeID == source {
+            recentlyEnded[index].placeID = target
+        }
+    }
+
+    /// Geçmiş elle değiştirildi (silme, birleştirme, düzenleme): motorun
+    /// elindeki kopyalar artık güvenilir değil. Silinmiş bir oturumun aynı yere
+    /// dönüşte hortlamaması için unutulur.
+    public mutating func forgetRecent() {
+        recentlyEnded.removeAll()
     }
 
     private mutating func handleWake(at now: Date) -> [SessionEffect] {
@@ -134,6 +152,8 @@ public struct SessionEngine: Sendable {
     private mutating func handleEndSessionRequested(at now: Date) -> [SessionEffect] {
         guard currentSession != nil else { return [] }
         var effects = endSession(at: now)
+        // Kullanıcı açıkça bitirdi: bu oturum geri açılmamalı.
+        recentlyEnded.removeAll()
         effects += startSession(at: now)
         return effects
     }
@@ -186,7 +206,7 @@ public struct SessionEngine: Sendable {
             if let sleptAt = closeAtSleep {
                 return commitPlaceChange(to: placeID, closingAt: sleptAt, startingAt: now)
             }
-            if immediate {
+            if immediate || isReturnToPrevious(placeID, at: now) {
                 return commitPlaceChange(to: placeID, closingAt: now, startingAt: now)
             }
 
@@ -269,7 +289,18 @@ public struct SessionEngine: Sendable {
     }
 
     private mutating func startSession(at now: Date, placeID: UUID? = nil) -> [SessionEffect] {
-        let session = Session(placeID: placeID ?? knownCurrentPlaceID, startedAt: now)
+        let resolved = placeID ?? knownCurrentPlaceID
+
+        if let match = resumable(placeID: resolved, at: now) {
+            var session = match.session
+            session.endedAt = nil
+            if session.placeID == nil { session.placeID = resolved }
+            currentSession = session
+            recentlyEnded.removeAll { match.replacing.contains($0.id) }
+            return [.sessionResumed(session, replacing: match.replacing)]
+        }
+
+        let session = Session(placeID: resolved, startedAt: now)
         currentSession = session
         return [.sessionStarted(session)]
     }
@@ -278,6 +309,63 @@ public struct SessionEngine: Sendable {
         guard var session = currentSession else { return [] }
         session.endedAt = max(session.startedAt, time)
         currentSession = nil
+        recentlyEnded.append(session)
+        if recentlyEnded.count > 2 {
+            recentlyEnded.removeFirst(recentlyEnded.count - 2)
+        }
         return [.sessionEnded(session)]
+    }
+
+    private struct ResumeMatch {
+        let session: Session
+        let replacing: [UUID]
+    }
+
+    /// Yeni açılacak oturumun yerine geri açılabilecek kapanmış oturum.
+    ///
+    /// İki durum var:
+    /// - Son kapanan oturum aynı yerde ve eşik içinde kapandı → o geri açılır.
+    /// - Son kapanan oturum kısa bir başka-yer oturumuydu, ondan öncekinin
+    ///   hemen ardından başladı (arada uyku yok) ve öncekisi aynı yerde → ikisi
+    ///   tek oturum olur. Bant ya da hotspot'a kısa süre takılmak böyle görünür;
+    ///   kafeye gidip dönmek ise arada bir uyku bırakır ve katılmaz.
+    private func resumable(placeID: UUID?, at now: Date) -> ResumeMatch? {
+        guard
+            let last = recentlyEnded.last,
+            let lastEnd = last.endedAt,
+            now.timeIntervalSince(lastEnd) < configuration.gapThreshold
+        else { return nil }
+
+        if Self.samePlace(last.placeID, placeID) {
+            return ResumeMatch(session: last, replacing: [last.id])
+        }
+
+        guard recentlyEnded.count >= 2 else { return nil }
+        let previous = recentlyEnded[recentlyEnded.count - 2]
+        guard
+            let previousEnd = previous.endedAt,
+            Self.samePlace(previous.placeID, placeID),
+            last.startedAt == previousEnd,
+            last.elapsed(at: now) < configuration.gapThreshold
+        else { return nil }
+        return ResumeMatch(session: previous, replacing: [previous.id, last.id])
+    }
+
+    /// Açık oturum, son kapanan oturumun bitişiyle başladıysa, kısaysa ve
+    /// kullanıcı o oturumun yerine döndüyse: dönüş kararlılık beklemez.
+    private func isReturnToPrevious(_ placeID: UUID, at now: Date) -> Bool {
+        guard
+            let current = currentSession,
+            let previous = recentlyEnded.last,
+            previous.placeID == placeID,
+            previous.endedAt == current.startedAt
+        else { return false }
+        return current.elapsed(at: now) < configuration.gapThreshold
+    }
+
+    /// Bilinmeyen yer, her iki yere de uyar: "Bilinmeyen yer"de başlayıp
+    /// Wi-Fi geç gelen oturum aynı oturumdur.
+    private static func samePlace(_ a: UUID?, _ b: UUID?) -> Bool {
+        a == nil || b == nil || a == b
     }
 }

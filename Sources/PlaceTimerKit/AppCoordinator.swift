@@ -227,6 +227,10 @@ public final class AppCoordinator {
             case .sessionEnded(let session):
                 history.append(session)
                 persistHistory()
+            case .sessionResumed(_, let replacing):
+                history.removeAll { replacing.contains($0.id) }
+                persistHistory()
+                persistState(at: Date())
             case .markReached(_, let elapsed, let placeID):
                 notifier.notifyMark(
                     elapsed: elapsed,
@@ -433,6 +437,7 @@ public final class AppCoordinator {
     public func deleteSession(_ sessionID: UUID) {
         guard engine.currentSession?.id != sessionID else { return }
         history = SessionHistory.remove(sessionID, from: history)
+        engine.forgetRecent()
         persistHistory()
         refreshDisplay()
     }
@@ -484,7 +489,11 @@ public final class AppCoordinator {
 
     private func persistState(at now: Date) {
         try? stateStore.save(
-            AppState(currentSession: engine.currentSession, lastHeartbeatAt: now)
+            AppState(
+                currentSession: engine.currentSession,
+                lastHeartbeatAt: now,
+                recentlyEnded: engine.recentlyEnded
+            )
         )
     }
 

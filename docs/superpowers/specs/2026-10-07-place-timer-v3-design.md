@@ -113,13 +113,19 @@ tek satır kalır, bildirim işaretleri korunur.
 Bu kural nedeni sorgulamaz: Wi-Fi kopması, kısa bir başka ağ, yanlış bir
 "şube" çözümlemesi, uygulamanın çöküp açılması — hepsi aynı sonuca varır.
 
-Uygulama: motor son kapanan oturumu `lastEnded` olarak tutar ve `AppState`'e
-yazar (yeniden başlatmada da çalışsın). Geri açma yeni bir etki üretir:
-`.sessionResumed(Session)`. Koordinatör bu etkide oturumu `history`'den çıkarır
-ve açık oturum olarak alır.
+Uygulama: motor son kapanan **iki** oturumu `recentlyEnded` olarak tutar ve
+`AppState`'e yazar (yeniden başlatmada da çalışsın). Son kapanan oturum aynı
+yerdeyse o geri açılır. Son kapanan, ondan öncekinin hemen ardından başlamış
+(arada uyku yok), ara eşiğinden kısa bir başka-yer oturumuysa ve öncekisi aynı
+yerdeyse ikisi tek oturum olur — kısa süre başka bir ağa takılmak böyle
+görünür; kafeye gidip dönmek arada uyku bıraktığı için katılmaz. Önceki yere
+dönüş kararlılık süresini beklemez. Geri açma `.sessionResumed(Session,
+replacing:)` etkisi üretir; koordinatör `replacing` kimliklerini geçmişten
+çıkarır. Geçmiş elle değiştiğinde (silme, birleştirme, düzenleme) motor bu
+listeyi unutur (`forgetRecent`).
 
 Kullanıcının "Oturumu bitir" komutuyla kapattığı oturum geri açılmaz
-(`lastEnded` temizlenir) — kullanıcı açıkça bitirdi.
+(`recentlyEnded` temizlenir) — kullanıcı açıkça bitirdi.
 
 ### 3.4 Gün sınırı
 
@@ -285,7 +291,7 @@ Erişilebilirlik: araç çubuğuna taşınan her kontrolün metin etiketi olur.
   `sessionResetSleepThreshold`'tan türetilir: en yakın seçeneğe yuvarlanır,
   0 ("Hemen") ve 5 dk → 15 dk; 4 saat → 2 saat. Eski anahtarlar okunur ama
   yazılmaz.
-- `state.json`: yeni isteğe bağlı `lastEnded: Session?`.
+- `state.json`: yeni isteğe bağlı `recentlyEnded: [Session]`.
 - `sessions.json`: şema değişmez.
 - `suggestions.json`: yeni, `{ dismissed: [String] }`.
 
@@ -295,7 +301,7 @@ Hepsi `decodeIfPresent`; eski dosyalar bozulmaz.
 
 | Birim | Katman | Değişiklik |
 |---|---|---|
-| `SessionEngine` | Core, saf | §3.1–3.3: `gapThreshold`, uyanık-ara, kararlılık, `lastEnded`, `.sessionResumed` |
+| `SessionEngine` | Core, saf | §3.1–3.3: `gapThreshold`, uyanık-ara, kararlılık, `recentlyEnded`, `.sessionResumed` |
 | `EngineConfiguration`, `Preferences` | Core | `gapThreshold`; eski eşikler kalkar; göç |
 | `Statistics` | Core, saf | Kırpma, gün/hafta/ay için `StatsPeriod` (aralık + kaydırma), günlük toplamlar, karşılaştırma |
 | `SessionHistory` | Core, saf | `merge`, `update` |
@@ -319,7 +325,7 @@ Core için birim testleri (`swift test`), mevcut stilde:
 - **Geri açma:** Wi-Fi kopar (`.unknown`) → oturum sürer. A → B (2 dk) → A →
   tek oturum. A'da oturum kapanır, 10 dk sonra A'da yeniden açılış →
   `.sessionResumed`, aynı kimlik. "Oturumu bitir" sonrası → geri açılmaz.
-  Uygulama yeniden başlatma `lastEnded`'i korur.
+  Uygulama yeniden başlatma `recentlyEnded`'ı korur.
 - **Kararlılık:** A → B 3 dk sürer → B'ye geçiş, eski oturum ilk gözlemde
   kapanır. A → B 2 dk → A → bölünme yok. A → unknown → B → sayaç doğru.
 - **Kırpma:** 23:00–01:00 oturumu iki güne bölünür; hafta ve ay sınırı.
