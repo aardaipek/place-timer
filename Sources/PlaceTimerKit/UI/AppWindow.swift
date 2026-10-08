@@ -10,10 +10,21 @@ public final class AppWindow {
     private var window: NSWindow?
     private var closeObserver: NSObjectProtocol?
     private let title: String
+
+    /// Ayarlar penceresi tam boy içerik ve sabit, boş bir birleşik araç
+    /// çubuğu alır; kenar çubuğu sistemin cam paneli. Diğer
+    /// küçük pencereler (yer sorusu, ilk açılış) sade kalır.
+    public enum Style {
+        case standard
+        case settings
+    }
+
+    private let style: Style
     private static var openCount = 0
 
-    public init(title: String) {
+    public init(title: String, style: Style = .standard) {
         self.title = title
+        self.style = style
     }
 
     public var isOpen: Bool { window != nil }
@@ -29,9 +40,28 @@ public final class AppWindow {
         NSApp.setActivationPolicy(.regular)
 
         let controller = NSHostingController(rootView: content())
+        if style == .settings {
+            // Başlık köprüleniyor, araç çubuğu köprülenmiyor: araç çubuğu
+            // aşağıda elle ve boş kuruluyor ki her bölümde aynı olsun.
+            // Boyut da sabit: içerik değişince pencere yeniden ölçülmesin.
+            controller.sceneBridgingOptions = [.toolbars, .title]
+            controller.sizingOptions = []
+        }
         let window = NSWindow(contentViewController: controller)
         window.title = title
-        window.styleMask = [.titled, .closable]
+        switch style {
+        case .standard:
+            window.styleMask = [.titled, .closable]
+        case .settings:
+            // `.fullSizeContentView` olmadan kenar çubuğu pencere kenarına
+            // yapışık düz bir sütun çiziliyordu; cam panel ancak içerik
+            // başlık çubuğunun altına uzandığında çıkıyor.
+            window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+            // Boş ama hep var olan araç çubuğu. Araç çubuğu bölümden bölüme
+            // gelip gidince pencere düğmeleri büyüyüp küçülüyordu.
+            window.toolbar = NSToolbar(identifier: "PlaceTimerSettings")
+            window.toolbarStyle = .unified
+        }
         window.isReleasedWhenClosed = false
 
         // Boyut ve konum tek adimda kuruluyor. Once boyutlandirip sonra
@@ -40,7 +70,9 @@ public final class AppWindow {
         // bagli kalip asagi kayiyordu. Olculdu — hicbir sey yapmayan
         // `center()` ile 848,42; ara adimlarla ekranin 15 punto altinda.
         // `frameRect(forContentRect:)` baslik cubugunu icine katiyor.
-        let contentSize = controller.view.fittingSize
+        let contentSize = style == .settings
+            ? NSSize(width: Design.settingsWidth, height: Design.settingsHeight)
+            : controller.view.fittingSize
         if contentSize.width > 0, contentSize.height > 0 {
             window.setFrame(centeredFrame(for: contentSize, of: window), display: false)
         } else {

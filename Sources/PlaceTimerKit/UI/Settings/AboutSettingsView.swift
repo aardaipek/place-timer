@@ -86,6 +86,23 @@ struct AboutSettingsView: View {
             }
 
             Section {
+                LabeledContent("Olay günlüğü") {
+                    Button("Finder'da göster", action: coordinator.revealEventLog)
+                        .buttonStyle(.link)
+                }
+            } header: {
+                Text("Teşhis")
+            } footer: {
+                Text(
+                    "Uyku, Wi-Fi ve oturum olaylarının son 14 günü. Bir oturum "
+                        + "beklenmedik biçimde bölündüğünde nedenini görmek için. "
+                        + "Cihazından çıkmaz."
+                )
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section {
                 Button("Tüm verileri sil…", role: .destructive) {
                     confirmingErase = true
                 }
@@ -93,8 +110,8 @@ struct AboutSettingsView: View {
                 Text("Veriler")
             } footer: {
                 Text(
-                    "Kayıtlı yerlerin ve bütün oturum geçmişin silinir, sayaç "
-                        + "sıfırdan başlar. Ayarların olduğu gibi kalır. Geri alınamaz."
+                    "Kayıtlı yerlerin, bütün oturum geçmişin ve olay günlüğü silinir, "
+                        + "sayaç sıfırdan başlar. Ayarların olduğu gibi kalır. Geri alınamaz."
                 )
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

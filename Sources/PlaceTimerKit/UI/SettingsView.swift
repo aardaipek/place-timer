@@ -3,37 +3,58 @@ import SwiftUI
 
 /// Ayarlar penceresi.
 ///
-/// Eskiden `TabView`'dı. Kendi penceremizin içinde `TabView` sekmeleri
-/// içeriğin tepesine basıyor: üstte pencere başlığı, hemen altında sekme
-/// şeridi — iki katlı bir kabuk ve eski System Preferences görüntüsü.
-/// (Sekmeleri başlık çubuğuna taşıyan `Settings` sahnesi bu uygulamada
-/// çalışmıyor; nedeni `PlaceTimerAppDelegate`'te yazılı.)
+/// Sistemin kenar çubuğu (`NavigationSplitView`): macOS 26'da yüzen cam panel,
+/// pencere düğmeleri içinde, seçim vurgusu ve klavye gezinmesi sistemden.
+/// Kendi çizdiğimiz kabuk denendi; ne cam paneli ne de düğmelerin yerini
+/// sistemle tutturabildi, ayrı bir kart gibi duruyordu.
 ///
-/// Kenar çubuğu hem bu çift başlığı kaldırıyor hem de bölüm adlarını
-/// kısaltmadan gösteriyor: dört simgenin altına sıkışan metinler yerine
-/// okunur bir liste. Seçili bölümün adı pencere başlığına da geçiyor.
+/// Pencerenin boyu bölümden bölüme değişmesin diye araç çubuğu sabit:
+/// `AppWindow` her zaman boş bir araç çubuğu kuruyor ve SwiftUI'nin araç
+/// çubuğu köprüsü kapalı. Eskiden yalnızca İstatistik araç çubuğuna düğme
+/// koyuyordu; araç çubuğu yalnızca o bölümde var olduğu için pencere 20 punto
+/// uzuyor, kapatma düğmeleri 10 punto kayıyordu (ölçüldü). Bölümlerin kendi
+/// kontrolleri bu yüzden içerikte.
 public struct SettingsView: View {
     @Bindable var coordinator: AppCoordinator
     @State private var tab: SettingsTab = .genel
+    @State private var stats = StatsNavigation()
 
     public init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
     }
 
     public var body: some View {
-        NavigationSplitView {
+        // Görünürlük sabit: araç çubuğu köprüsü kapalıyken split view kenar
+        // çubuğunu kendiliğinden daraltıyordu (ölçüldü, sütun ağaçta yoktu).
+        NavigationSplitView(columnVisibility: .constant(.all)) {
             List(SettingsTab.allCases, selection: $tab) { bolum in
-                Label(bolum.title, systemImage: bolum.symbol)
-                    .tag(bolum)
+                Label {
+                    Text(bolum.title)
+                } icon: {
+                    SettingsIcon(tab: bolum)
+                }
+                .tag(bolum)
             }
-            .navigationSplitViewColumnWidth(Design.settingsSidebarWidth)
+            .navigationSplitViewColumnWidth(
+                min: Design.settingsSidebarWidth,
+                ideal: Design.settingsSidebarWidth,
+                max: Design.settingsSidebarWidth
+            )
+            .frame(minWidth: Design.settingsSidebarWidth)
+            .toolbar(removing: .sidebarToggle)
         } detail: {
             pane
                 .navigationTitle(tab.title)
-                .frame(minWidth: Design.settingsPaneWidth, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .navigationSplitViewStyle(.balanced)
-        .frame(width: Design.settingsWidth, height: Design.settingsHeight)
+        // Sabit `frame` yok: pencerenin boyunu `AppWindow` koyuyor. Görünüm
+        // kendine 560 punto ayırınca split view başlık çubuğunun payını
+        // üstüne ekleyip 593'e çıkıyor, altı pencereden taşıyordu (ölçüldü).
+        .onChange(of: coordinator.requestedSettingsTab, initial: true) { _, istenen in
+            guard let istenen else { return }
+            tab = istenen
+            coordinator.requestedSettingsTab = nil
+        }
     }
 
     @ViewBuilder
@@ -42,9 +63,22 @@ public struct SettingsView: View {
         case .genel: GeneralSettingsView(coordinator: coordinator)
         case .yerler: PlacesSettingsView(coordinator: coordinator)
         case .izinler: PermissionsSettingsView(coordinator: coordinator)
-        case .istatistik: StatisticsSettingsView(coordinator: coordinator)
+        case .istatistik: StatisticsSettingsView(coordinator: coordinator, navigation: stats)
         case .hakkinda: AboutSettingsView(coordinator: coordinator)
         }
+    }
+}
+
+/// Sistem Ayarları'ndaki gibi renkli kare içinde simge.
+private struct SettingsIcon: View {
+    let tab: SettingsTab
+
+    var body: some View {
+        Image(systemName: tab.symbol)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 20, height: 20)
+            .background(tab.tint.gradient, in: .rect(cornerRadius: 5))
     }
 }
 

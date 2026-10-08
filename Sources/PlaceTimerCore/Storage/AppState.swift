@@ -9,10 +9,28 @@ import Foundation
 public struct AppState: Codable, Sendable, Equatable {
     public var currentSession: Session?
     public var lastHeartbeatAt: Date?
+    /// Motorun son kapanan oturumları; aynı yere dönüşte geri açma için.
+    public var recentlyEnded: [Session]
 
-    public init(currentSession: Session? = nil, lastHeartbeatAt: Date? = nil) {
+    public init(
+        currentSession: Session? = nil,
+        lastHeartbeatAt: Date? = nil,
+        recentlyEnded: [Session] = []
+    ) {
         self.currentSession = currentSession
         self.lastHeartbeatAt = lastHeartbeatAt
+        self.recentlyEnded = recentlyEnded
+    }
+
+    /// 1.0'ın dosyasında `recentlyEnded` yok.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            currentSession: try container.decodeIfPresent(Session.self, forKey: .currentSession),
+            lastHeartbeatAt: try container.decodeIfPresent(Date.self, forKey: .lastHeartbeatAt),
+            recentlyEnded: try container.decodeIfPresent([Session].self, forKey: .recentlyEnded)
+                ?? []
+        )
     }
 }
 
@@ -26,7 +44,11 @@ extension SessionEngine {
         configuration: EngineConfiguration = EngineConfiguration(),
         now: Date
     ) -> (engine: SessionEngine, effects: [SessionEffect]) {
-        var engine = SessionEngine(configuration: configuration, restoring: state.currentSession)
+        var engine = SessionEngine(
+            configuration: configuration,
+            restoring: state.currentSession,
+            recentlyEnded: state.recentlyEnded
+        )
 
         guard state.currentSession != nil, let heartbeat = state.lastHeartbeatAt else {
             let effects = engine.handle(.wake, at: now)

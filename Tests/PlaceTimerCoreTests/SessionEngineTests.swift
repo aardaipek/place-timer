@@ -45,7 +45,7 @@ struct SessionEngineTests {
         #expect(engine.currentSession?.placeID == kafe)
     }
 
-    @Test("45 dakikalık uyku oturumu bozmaz")
+    @Test("20 dakikalık uyku oturumu bozmaz")
     func shortSleepKeepsSession() {
         var engine = SessionEngine()
         engine.handle(.wake, at: at(0))
@@ -53,35 +53,13 @@ struct SessionEngineTests {
         let started = engine.currentSession?.id
 
         engine.handle(.sleep, at: at(30))
-        let effects = engine.handle(.wake, at: at(75))
-        engine.handle(.placeResolved(.known(kafe)), at: at(75))
+        let effects = engine.handle(.wake, at: at(50))
+        engine.handle(.placeResolved(.known(kafe)), at: at(50))
 
         #expect(effects.isEmpty)
         #expect(engine.currentSession?.id == started)
         // Yerde geçen süre uyku aralığını içerir.
-        #expect(engine.elapsed(at: at(75)) == 75 * 60)
-    }
-
-    /// "Kapağı kapattığım an dursun" ayarı: eşik sıfırken her uyku oturumu
-    /// kapatır ve oturum uyanışta değil, uykuya dalınan anda biter — kapalı
-    /// geçen süre hiçbir yere yazılmaz.
-    @Test("Uyku eşiği sıfırken oturum kapağın kapandığı anda biter")
-    func zeroSleepThresholdEndsSessionAtSleep() {
-        var engine = SessionEngine(
-            configuration: EngineConfiguration(sessionResetSleepThreshold: 0)
-        )
-        engine.handle(.wake, at: at(0))
-        engine.handle(.placeResolved(.known(ev)), at: at(0))
-        let ilk = engine.currentSession?.id
-
-        engine.handle(.sleep, at: at(30))
-        engine.handle(.wake, at: at(90))
-
-        let yeni = engine.currentSession
-        #expect(yeni?.id != ilk)
-        // Yeni oturum uyanış anında basliyor; 60 dakikalik kapali sure disarida.
-        #expect(yeni?.startedAt == at(90))
-        #expect(engine.elapsed(at: at(90)) == 0)
+        #expect(engine.elapsed(at: at(50)) == 50 * 60)
     }
 
     @Test("90 dakikalık uyku oturumu kapatır, yenisini açar")
@@ -129,9 +107,9 @@ struct SessionEngineTests {
         #expect(engine.elapsed(at: at(50)) == 0)
     }
 
-    @Test("Uyanıkken yer değişimi oturumu o an kapatır")
+    @Test("Kararlılık süresi sıfırken uyanıkken yer değişimi oturumu o an kapatır")
     func placeChangeWhileAwakeClosesNow() {
-        var engine = SessionEngine()
+        var engine = SessionEngine(configuration: EngineConfiguration(placeChangeStability: 0))
         engine.handle(.wake, at: at(0))
         engine.handle(.placeResolved(.known(ev)), at: at(0))
 
@@ -172,50 +150,6 @@ struct SessionEngineTests {
         #expect(engine.currentSession?.placeID == kafe)
     }
 
-    @Test("Ekran kilitliyken aktif sayaç durur, yerde geçen süre akar")
-    func lockedScreenPausesActiveCounter() {
-        var engine = SessionEngine()
-        engine.handle(.wake, at: at(0))
-        engine.handle(.placeResolved(.known(kafe)), at: at(0))
-
-        advance(&engine, from: at(0), seconds: 60)
-        #expect(engine.activeSeconds == 59)
-
-        engine.handle(.screenLocked, at: at(1))
-        advance(&engine, from: at(1), seconds: 120)
-        #expect(engine.activeSeconds == 59)          // kilitliyken artmadı
-        #expect(engine.elapsed(at: at(3)) == 180)    // ama süre aktı
-    }
-
-    @Test("5 dakikalık hareketsizlik aktif sayacı durdurur, girdi gelince sürer")
-    func idlePausesActiveCounter() {
-        var engine = SessionEngine()
-        engine.handle(.wake, at: at(0))
-        engine.handle(.placeResolved(.known(kafe)), at: at(0))
-
-        advance(&engine, from: at(0), seconds: 30, idle: 0)
-        #expect(engine.activeSeconds == 29)
-
-        // Eşiğin üstünde hareketsizlik: sayaç donar.
-        advance(&engine, from: at(0.5), seconds: 30, idle: 400)
-        #expect(engine.activeSeconds == 29)
-
-        // Kullanıcı geri döndü.
-        advance(&engine, from: at(1), seconds: 30, idle: 0)
-        #expect(engine.activeSeconds == 59)
-    }
-
-    @Test("Kaçan tick'ler aktif süreyi şişirmez")
-    func missedTicksAreClamped() {
-        var engine = SessionEngine()
-        engine.handle(.wake, at: at(0))
-
-        engine.handle(.tick(idleSeconds: 0), at: at(0))
-        engine.handle(.tick(idleSeconds: 0), at: at(10))  // 10 dakikalık boşluk
-
-        #expect(engine.activeSeconds == 5)  // maxTickDelta
-    }
-
     @Test("Her saat sınırı tam olarak bir bildirim üretir")
     func hourMarksFireExactlyOnce() {
         var engine = SessionEngine()
@@ -241,8 +175,8 @@ struct SessionEngineTests {
         engine.handle(.placeResolved(.known(kafe)), at: at(0))
 
         engine.handle(.sleep, at: at(10))
-        engine.handle(.wake, at: at(55))            // 45 dk: oturum sürüyor
-        engine.handle(.placeResolved(.known(kafe)), at: at(55))
+        engine.handle(.wake, at: at(35))            // 25 dk: oturum sürüyor
+        engine.handle(.placeResolved(.known(kafe)), at: at(35))
 
         let effects = engine.handle(.tick(idleSeconds: 0), at: at(70))
         #expect(effects == [.markReached(index: 1, elapsed: 3600, placeID: kafe)])
@@ -250,7 +184,7 @@ struct SessionEngineTests {
 
     @Test("Yeni oturum saat sınırlarını sıfırdan sayar")
     func hourMarksResetWithNewSession() {
-        var engine = SessionEngine()
+        var engine = SessionEngine(configuration: EngineConfiguration(placeChangeStability: 0))
         engine.handle(.wake, at: at(0))
         engine.handle(.placeResolved(.known(ev)), at: at(0))
         engine.handle(.tick(idleSeconds: 0), at: at(60))
@@ -280,18 +214,6 @@ struct SessionEngineTests {
         #expect(effects == [.markReached(index: 2, elapsed: 7200, placeID: kafe)])
     }
 
-    @Test("Uykudayken gelen tick'ler yok sayılır")
-    func ticksDuringSleepAreIgnored() {
-        var engine = SessionEngine()
-        engine.handle(.wake, at: at(0))
-        advance(&engine, from: at(0), seconds: 10)
-        let before = engine.activeSeconds
-
-        engine.handle(.sleep, at: at(1))
-        advance(&engine, from: at(1), seconds: 60)
-
-        #expect(engine.activeSeconds == before)
-    }
 }
 
 @Suite("Bildirim aralığı")
@@ -357,15 +279,13 @@ struct ConfigurationUpdateTests {
         advance(&motor, from: at(0), seconds: 30)
 
         let oturum = motor.currentSession?.id
-        let aktif = motor.activeSeconds
 
         motor.updateConfiguration(
-            EngineConfiguration(idleThreshold: 120), at: at(1)
+            EngineConfiguration(gapThreshold: 3600), at: at(1)
         )
 
         #expect(motor.currentSession?.id == oturum)
-        #expect(motor.activeSeconds == aktif)
-        #expect(motor.configuration.idleThreshold == 120)
+        #expect(motor.configuration.gapThreshold == 3600)
     }
 
     @Test("Aralık kısalınca birikmiş bildirimler topluca düşmez")

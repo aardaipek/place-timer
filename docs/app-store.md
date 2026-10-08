@@ -116,6 +116,14 @@ notarizasyon icindir — Developer ID ile dagitim yapilmadigi surece gerekmez.)
       `Scripts/build-app.sh --fresh` bunu yerelde yapar.
 - [ ] `swift test` ve `swift build -Xswiftc -warnings-as-errors` temiz mi?
 
+**1.1.0 (5)** — 7 Ekim 2026: TestFlight'a yüklendi (iç test grubu "Ic Test"). 137 test ve `-warnings-as-errors` derlemesi temiz; Xcode 27.0 ile derlendi.
+
+**1.1.0 (6)** — 7 Ekim 2026: TestFlight'a yüklendi (iç test grubu "Ic Test"). Sabit ayarlar kabuğu ve menubar halka/kapsül görünümü. 141 test ve `-warnings-as-errors` derlemesi temiz.
+
+**1.1.0 (7)** — 8 Ekim 2026: TestFlight'a yüklendi (iç test grubu "Ic Test"). Ayarlar sistemin kenar çubuğuna döndü; araç çubuğu her bölümde sabit.
+
+**1.1.0 (7) App Store incelemesine gönderildi** — 8 Ekim 2026. "Bu sürümde yenilikler" metni ve promosyon metni girildi; inceleme notunun eski "BUILD 4" paragrafı 1.1.0 değişiklik özetiyle değiştirildi. Yayın türü: onaydan sonra otomatik.
+
 ## Bilinen kirilganlik
 
 `AppCoordinator.init` veri klasorunu olusturamazsa sessizce

@@ -1,159 +1,198 @@
 import PlaceTimerCore
 import SwiftUI
 
-/// Aralık başına yer toplamları ve o aralıktaki oturumlar.
+/// Laptopla geçen süre: gün, hafta, ay ve geçmişleri.
 ///
-/// Toplamlar eskiden dört sütunlu bir `Table`'dı: "Yer / Toplam / Aktif /
-/// Oturum". Tablo sayıları hizalar ama karşılaştırmaz — hangi yerin ötekinin
-/// iki katı olduğunu görmek için rakamları okuyup zihinden bölmek gerekiyordu.
-/// Süre zaten uzunluk demek; her satırın kendi çubuğu bu işi göz için yapıyor.
-/// Çubuk rengi yerin rengi, yani paneldeki nokta ve gün şeridiyle aynı.
+/// Üstte asıl sorunun cevabı (toplam ve önceki dönemle fark), altında
+/// öneriler, yerler ve günlere bölünmüş oturumlar. Dönem seçimi ve gezinme
+/// listenin üstünde tek bir satırda (`StatsPeriodBar`).
 ///
-/// Oturum listesi ise otomatik takibin yanıldığı yerleri düzeltmek için:
-/// bilgisayar yanlış ağa bağlandığında ya da yer yanlış çözüldüğünde ortaya
-/// çıkan oturum buradan siliniyor.
+/// Oturumlar `List` içinde: seçim, ⌫ ile silme ve sağ tık menüsü `Form`'da
+/// yok. Satır içi "Sil" linkleri bu yüzden kalktı.
 struct StatisticsSettingsView: View {
     @Bindable var coordinator: AppCoordinator
-    @State private var range: StatsRange = .week
 
-    /// `placeTotals` süreye göre azalan sıralı döner; en uzun ilk satırdır ve
-    /// çubukların ölçeği ona göre kurulur.
-    private var totals: [PlaceTotal] { coordinator.totals(for: range) }
-    private var enUzun: TimeInterval { totals.first?.totalSeconds ?? 0 }
-    private var toplam: TimeInterval { totals.reduce(0) { $0 + $1.totalSeconds } }
+    @Bindable var navigation: StatsNavigation
+    @State private var selection: Set<UUID> = []
+    @State private var editing: Session?
+    @State private var editError: SessionHistory.EditError?
+    @State private var showsEditError = false
 
-    private var sessions: [Session] { coordinator.sessions(for: range) }
+    private var period: StatsPeriod { navigation.period }
 
     var body: some View {
-        Form {
+        let days = coordinator.sessionDays(in: period)
+        let totals = coordinator.totals(in: period)
+        let periodTotal = totals.reduce(0) { $0 + $1.totalSeconds }
+
+        List(selection: $selection) {
             Section {
-                Picker("Aralık", selection: $range) {
-                    ForEach(StatsRange.allCases, id: \.self) {
-                        Text($0.displayName).tag($0)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                StatsSummaryView(coordinator: coordinator, period: period)
             }
 
-            if totals.isEmpty {
+            if !coordinator.suggestions.isEmpty {
                 Section {
-                    ContentUnavailableView {
-                        Label("Kayıt yok", systemImage: "chart.bar")
-                    } description: {
-                        Text("Bu aralıkta henüz bir oturum yok.")
+                    ForEach(coordinator.suggestions) { suggestion in
+                        SuggestionRow(suggestion: suggestion, coordinator: coordinator)
+                            .selectionDisabled()
                     }
-                }
-            } else {
-                Section {
-                    ForEach(totals) { total in
-                        totalRow(for: total)
+                    if coordinator.offersLongerGap {
+                        HStack {
+                            Text("Bu aralıkları sık birleştiriyorsun. Ara eşiğini 1 saate çıkarayım mı?")
+                                .font(.callout)
+                            Spacer()
+                            Button("Eşiği 1 saate çıkar", action: coordinator.adoptLongerGap)
+                                .buttonStyle(.glass)
+                        }
+                        .selectionDisabled()
                     }
                 } header: {
                     HStack {
-                        Text("Yerler")
+                        Text("Öneriler")
                         Spacer()
-                        Text(DurationFormat.readable(toplam))
+                        Button("Tümünü uygula", action: coordinator.applyAllSuggestions)
+                            .buttonStyle(.link)
+                    }
+                }
+            }
+
+            if !totals.isEmpty {
+                Section("Yerler") {
+                    ForEach(totals) { total in
+                        placeRow(total, of: periodTotal)
+                            .selectionDisabled()
+                    }
+                }
+            }
+
+            ForEach(days) { day in
+                Section {
+                    ForEach(day.sessions) { session in
+                        SessionRowView(
+                            session: session,
+                            placeName: coordinator.placeName(for: session.placeID),
+                            showsPlace: day.placeCount > 1,
+                            isCurrent: session.id == coordinator.currentSessionID,
+                            seconds: overlap(of: session, with: dayInterval(day.day), now: Date())
+                        )
+                        .tag(session.id)
+                    }
+                } header: {
+                    HStack {
+                        Text(StatsPeriod.containing(day.day, scope: .day).title(now: Date()))
+                        Spacer()
+                        Text(DurationFormat.readable(day.total))
                             .monospacedDigit()
                     }
                 }
-
-                Section {
-                    ForEach(sessions) { session in
-                        sessionRow(for: session)
-                    }
-                } header: {
-                    Text("Oturumlar")
-                } footer: {
-                    Text(
-                        "Yanlış açılmış bir oturumu silebilirsin; süresi "
-                            + "toplamlardan da düşer. Süren oturum silinmez — "
-                            + "onu panelden \"Sayacı sıfırla\" ile kapatabilirsin."
-                    )
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .listStyle(.inset)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            StatsPeriodBar(navigation: navigation, coordinator: coordinator)
+        }
+        .overlay {
+            if days.isEmpty && coordinator.suggestions.isEmpty {
+                ContentUnavailableView {
+                    Label("Kayıt yok", systemImage: "chart.bar")
+                } description: {
+                    Text("Bu dönemde henüz bir oturum yok.")
                 }
             }
         }
-        .formStyle(.grouped)
+        .contextMenu(forSelectionType: UUID.self) { ids in
+            sessionMenu(ids)
+        } primaryAction: { ids in
+            if ids.count == 1, let id = ids.first { editing = coordinator.session(id: id) }
+        }
+        .onDeleteCommand {
+            coordinator.deleteSessions(selection)
+            selection = []
+        }
+        .onChange(of: period) {
+            // Görünmeyen satırlar ⌫ ile silinmesin.
+            selection = []
+        }
+        .sheet(item: $editing) { session in
+            SessionEditView(coordinator: coordinator, session: session)
+        }
+        .fileExporter(
+            isPresented: $navigation.exporting,
+            document: navigation.exportDocument,
+            contentType: .commaSeparatedText,
+            defaultFilename: "PlaceTimer \(period.title(now: Date()))"
+        ) { _ in }
+        .onChange(of: editError) { _, yeni in
+            showsEditError = yeni != nil
+        }
+        .alert("Birleştirilemedi", isPresented: $showsEditError, presenting: editError) { _ in
+            Button("Tamam", role: .cancel) { editError = nil }
+        } message: { error in
+            Text(EditErrorText.message(error))
+        }
     }
 
-    private func totalRow(for total: PlaceTotal) -> some View {
-        let color = PlaceColor.color(for: total.placeID)
+    /// Yaz saati günlerinde 23 ya da 25 saat; sabit 86.400 saniye bir saat
+    /// kaydırırdı.
+    private func dayInterval(_ day: Date) -> DateInterval {
+        Calendar.placeTimer.dateInterval(of: .day, for: day) ?? DateInterval(start: day, duration: 86_400)
+    }
+
+    /// Seçimde yalnızca açık oturum varsa silinecek bir şey yok.
+    private func onlyCurrent(_ ids: Set<UUID>) -> Bool {
+        guard let current = coordinator.currentSessionID else { return false }
+        return ids == [current]
+    }
+
+    @ViewBuilder
+    private func sessionMenu(_ ids: Set<UUID>) -> some View {
+        if ids.count == 1, let id = ids.first {
+            Button("Düzenle…") { editing = coordinator.session(id: id) }
+            Button("Öncekiyle birleştir") { editError = coordinator.mergeWithPrevious(id) }
+                .disabled(coordinator.previousSession(of: id) == nil)
+        } else if ids.count > 1 {
+            Button("Birleştir") { editError = coordinator.mergeSessions(ids) }
+        }
+        Divider()
+        Button("Sil", role: .destructive) {
+            coordinator.deleteSessions(ids)
+            selection.subtract(ids)
+        }
+        .disabled(onlyCurrent(ids))
+    }
+
+    private func placeRow(_ total: PlaceTotal, of periodTotal: TimeInterval) -> some View {
+        let share = periodTotal > 0 ? total.totalSeconds / periodTotal : 0
 
         return VStack(alignment: .leading, spacing: Design.tight) {
             HStack(spacing: Design.small) {
                 Circle()
-                    .fill(color)
+                    .fill(PlaceColor.color(for: total.placeID))
                     .frame(width: Design.dotSize, height: Design.dotSize)
                     .accessibilityHidden(true)
-
                 Text(coordinator.placeName(for: total.placeID))
                     .lineLimit(1)
-
                 Spacer(minLength: Design.small)
-
                 Text(DurationFormat.readable(total.totalSeconds))
                     .monospacedDigit()
             }
-
-            // Çubuk aynı sayıyı ikinci kez söylüyor; ekran okuyucuya iki kez
-            // okutmanın anlamı yok.
-            ProgressView(value: total.totalSeconds, total: max(enUzun, 1))
+            ProgressView(value: share)
                 .progressViewStyle(.linear)
-                .tint(color)
+                .tint(PlaceColor.color(for: total.placeID))
                 .accessibilityHidden(true)
-
-            Text(
-                "Aktif \(DurationFormat.readable(total.activeSeconds))"
-                    + " · \(total.sessionCount) oturum"
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
+            Text("%\(Int((share * 100).rounded())) · \(total.sessionCount) oturum")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
         }
         .padding(.vertical, Design.tight)
-    }
-
-    private func sessionRow(for session: Session) -> some View {
-        let suruyor = session.id == coordinator.currentSessionID
-
-        return HStack(spacing: Design.small) {
-            Circle()
-                .fill(PlaceColor.color(for: session.placeID))
-                .frame(width: Design.dotSize, height: Design.dotSize)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(coordinator.placeName(for: session.placeID))
-                    .lineLimit(1)
-                Text(DurationFormat.range(from: session.startedAt, to: session.endedAt))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-
-            Spacer(minLength: Design.small)
-
-            Text(DurationFormat.readable(session.elapsed(at: Date())))
-                .monospacedDigit()
-
-            if suruyor {
-                Text("sürüyor")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Button("Sil", role: .destructive) {
-                    coordinator.deleteSession(session.id)
-                }
-                .buttonStyle(.link)
-            }
-        }
-        .padding(.vertical, 2)
     }
 }
 
 #Preview {
-    StatisticsSettingsView(coordinator: AppCoordinator(directory: .temporaryDirectory))
+    StatisticsSettingsView(
+        coordinator: AppCoordinator(directory: .temporaryDirectory),
+        navigation: StatsNavigation()
+    )
         .frame(width: Design.settingsPaneWidth, height: Design.settingsHeight)
 }

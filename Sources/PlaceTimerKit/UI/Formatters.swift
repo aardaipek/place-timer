@@ -34,13 +34,18 @@ public enum DurationFormat {
         return "\(minutes)dk"
     }
 
+    /// Saat: `12:36`. Arayüz yalnızca Türkçe; sistem bölgesi en_US olsa bile
+    /// "12:36 PM" yazılmasın diye yerel ayar sabit.
+    public static func time(_ date: Date) -> String {
+        date.formatted(
+            Date.FormatStyle(date: .omitted, time: .shortened, locale: Locale(identifier: "tr_TR"))
+        )
+    }
+
     /// Oturum aralığı: `09:10–11:30` veya süregelen oturum için `12:40–…`.
     public static func range(from start: Date, to end: Date?) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        let startText = formatter.string(from: start)
-        guard let end else { return "\(startText)–…" }
-        return "\(startText)–\(formatter.string(from: end))"
+        guard let end else { return "\(time(start))–…" }
+        return "\(time(start))–\(time(end))"
     }
 
     /// Menubar dar bir yer; uzun adlar kesilir.

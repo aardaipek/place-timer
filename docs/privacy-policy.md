@@ -18,15 +18,16 @@ erişimimiz yoktur.
 ## Cihazınızda saklanan veriler
 
 Aşağıdakiler yalnızca kendi Mac'inizde, uygulamanın sandbox konteyneri içinde
-düz JSON dosyaları olarak durur:
+düz JSON dosyaları (olay günlüğü düz metin) olarak durur:
 
 | Veri | Neden |
 |---|---|
 | Kayıtlı yerlerin adları | Bulunduğunuz yeri tanımak için |
 | Bu yerlere bağlı Wi-Fi ağ adları (SSID) ve erişim noktası adresleri (BSSID) | Yer eşleştirmesi için |
 | Yerlere ait koordinatlar | Aynı adlı ağları birbirinden ayırmak için (örneğin bir zincir kafenin iki şubesi) |
-| Oturum geçmişi: başlangıç/bitiş zamanları, aktif çalışma süreleri | Süre hesapları ve istatistik için |
-| Uygulama ayarlarınız | Tercihlerinizi hatırlamak için |
+| Oturum geçmişi: başlangıç/bitiş zamanları | Süre hesapları ve istatistik için |
+| Uygulama ayarlarınız ve yoksaydığınız öneriler | Tercihlerinizi hatırlamak için |
+| Olay günlüğü (son 14 gün): uyku/uyanma, bağlanılan Wi-Fi ağının adı ve adresi, konum doğruluğu, oturum olayları | Bir oturum beklenmedik biçimde bölündüğünde nedenini görmek için; hiçbir yere gönderilmez ve **Tüm verileri sil** ile silinir |
 
 Konum:
 

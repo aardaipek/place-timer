@@ -14,26 +14,36 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section {
+                Picker("Görünüm", selection: $draft.menuBarStyle) {
+                    ForEach(MenuBarStyle.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                LabeledContent("Önizleme") { menuBarPreview }
                 Toggle("Saniyeleri göster", isOn: $draft.showSeconds)
                 Toggle("Yerin adını göster", isOn: $draft.showPlaceNameInMenuBar)
             } header: {
                 Text("Menubar")
             } footer: {
-                menuBarPreview
+                if draft.menuBarStyle == .ring {
+                    Text("Halka bulunduğun saatin ne kadarının dolduğunu gösterir; tam saatte yeniden başlar.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Section {
-                Picker("Uyku eşiği", selection: $draft.sessionResetSleepThreshold) {
-                    ForEach(ThresholdOption.sleep) { Text($0.title).tag($0.seconds) }
-                }
-
-                Picker("Hareketsizlik eşiği", selection: $draft.idleThreshold) {
-                    ForEach(ThresholdOption.idle) { Text($0.title).tag($0.seconds) }
+                Picker("Ara eşiği", selection: $draft.gapThreshold) {
+                    ForEach(ThresholdOption.gap) { Text($0.title).tag($0.seconds) }
                 }
             } header: {
                 Text("Oturum")
             } footer: {
-                sessionFooter
+                Text(
+                    "Bilgisayardan bu süreden uzun uzak kalırsan oturum, ayrıldığın "
+                        + "anda biter. Daha kısa aralar — mutfak, agent'ı beklemek, "
+                        + "Wi-Fi kopması — oturumu bozmaz."
+                )
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             Section {
@@ -75,52 +85,24 @@ struct GeneralSettingsView: View {
         }
     }
 
-    /// İki anahtarın ne yaptığını anlatmak yerine gösteriyoruz: buradaki
-    /// başlık menubar'daki metnin ta kendisi, aynı işlevden üretiliyor.
+    /// Anahtarların ne yaptığını anlatmak yerine gösteriyoruz: buradaki
+    /// görüntü menubar'a çizilen görüntünün ta kendisi, aynı işlevden üretiliyor.
     private var menuBarPreview: some View {
-        HStack(spacing: Design.small) {
-            Text("Şöyle görünür")
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: Design.small)
-
-            Text(
-                MenuBarTitle.text(
-                    placeName: coordinator.placeName,
-                    elapsed: coordinator.elapsed,
-                    preferences: draft
-                )
+        let title = MenuBarTitle.text(
+            placeName: coordinator.placeName,
+            elapsed: coordinator.elapsed,
+            preferences: draft
+        )
+        return Image(
+            nsImage: MenuBarLabel.image(
+                for: title,
+                style: draft.menuBarStyle,
+                progress: MenuBarStyle.hourProgress(coordinator.elapsed)
             )
-            .monospacedDigit()
-            .lineLimit(1)
-            .padding(.horizontal, Design.small)
-            .padding(.vertical, Design.tight)
-            .glassEffect(in: .capsule)
-        }
-        .animation(.snappy, value: draft)
-    }
-
-    /// "Hemen" eşiği ötekilerden başka bir şey anlatıyor; açıklama da onunla
-    /// birlikte değişiyor. Sabit bir metin ya birini ya ötekini yanlış anlatırdı.
-    @ViewBuilder
-    private var sessionFooter: some View {
-        if draft.sessionResetSleepThreshold == 0 {
-            Text(
-                "Kapağı kapattığın an oturum biter; kapalı geçen süre hiçbir yere "
-                    + "yazılmaz. Hareketsizlik eşiği ise aktif çalışma sayacının ne "
-                    + "zaman duracağını belirler."
-            )
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        } else {
-            Text(
-                "Uyku eşiği oturumun ne zaman kapanacağını, hareketsizlik eşiği "
-                    + "aktif çalışma sayacının ne zaman duracağını belirler. "
-                    + "Eşikten kısa molalar — kahve almak, tuvalet — oturumu bozmaz."
-            )
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
+        )
+        .renderingMode(.template)
+        .foregroundStyle(.primary)
+        .accessibilityLabel(title)
     }
 
     @ViewBuilder

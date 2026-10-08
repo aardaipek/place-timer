@@ -15,6 +15,7 @@ import SwiftUI
 struct DayStripView: View {
     let segments: [DaySegment]
     let now: Date
+    var height: CGFloat = Design.stripHeight
 
     private var start: Date? { segments.first?.start }
 
@@ -28,15 +29,15 @@ struct DayStripView: View {
             Canvas { context, size in
                 draw(in: &context, size: size)
             }
-            .frame(height: Design.stripHeight)
+            .frame(height: height)
             .accessibilityElement()
             .accessibilityLabel(erisilebilirlikMetni)
 
             if let start {
                 HStack {
-                    Text(start, format: .dateTime.hour().minute())
+                    Text(DurationFormat.time(start))
                     Spacer()
-                    Text(now, format: .dateTime.hour().minute())
+                    Text(DurationFormat.time(now))
                 }
                 .font(.caption)
                 .foregroundStyle(.tertiary)

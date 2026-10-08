@@ -28,7 +28,6 @@ public final class AppCoordinator {
 
     public private(set) var placeName: String = "Bilinmeyen yer"
     public private(set) var elapsed: TimeInterval = 0
-    public private(set) var activeSeconds: TimeInterval = 0
     public private(set) var prompt: PlacePrompt? {
         didSet {
             guard prompt != oldValue else { return }
@@ -44,6 +43,16 @@ public final class AppCoordinator {
     public private(set) var preferences = Preferences()
     public private(set) var todaySegments: [DaySegment] = []
     public private(set) var todayHereSeconds: TimeInterval = 0
+    public private(set) var canUndo = false
+
+    /// Panelden "ayarların şu bölümünü aç" isteği. Ayarlar penceresi zaten
+    /// açıksa da sekme değişsin diye pencere bunu izler ve tüketir.
+    var requestedSettingsTab: SettingsTab?
+    public private(set) var suggestions: [Suggestion] = []
+    public private(set) var todayTotalSeconds: TimeInterval = 0
+    /// Bugün kaç farklı yerde bulunuldu; tek yerse panel "Bugün burada"yı
+    /// "Bugün toplam"ın tekrarı olarak göstermez.
+    public private(set) var placesTodayCount: Int = 0
 
     public var currentPlaceID: UUID? { engine.currentSession?.placeID }
     public var sessionStartedAt: Date? { engine.currentSession?.startedAt }
@@ -54,7 +63,25 @@ public final class AppCoordinator {
     private let notifier = Notifier()
     private let power = PowerMonitor()
 
-    private var engine = SessionEngine()
+    /// Motor her saniye tick alıyor; doğrudan gözlenseydi motoru okuyan her
+    /// view (istatistik sayfası bütün geçmişi tarar) saniyede bir yeniden
+    /// çizilirdi. Gözlem yalnızca oturum ya da yer gerçekten değişince
+    /// `engineRevision` üzerinden tetiklenir.
+    @ObservationIgnored private var engineStorage = SessionEngine()
+    private var engineRevision = 0
+
+    private var engine: SessionEngine {
+        get {
+            _ = engineRevision
+            return engineStorage
+        }
+        set {
+            let changed = newValue.currentSession != engineStorage.currentSession
+                || newValue.currentPlace != engineStorage.currentPlace
+            engineStorage = newValue
+            if changed { engineRevision &+= 1 }
+        }
+    }
     private var catalog = PlaceCatalog()
     private var history: [Session] = []
 
@@ -62,6 +89,10 @@ public final class AppCoordinator {
     private let historyStore: JSONFileStore<[Session]>
     private let stateStore: JSONFileStore<AppState>
     private let preferencesStore: JSONFileStore<Preferences>
+    private let suggestionStore: JSONFileStore<SuggestionState>
+    private var suggestionState = SuggestionState()
+    private let eventLog: EventLog
+    private var lastLoggedResolution: String?
 
     private var ticker: Timer?
     private var ticksSinceNetworkCheck = 0
@@ -72,6 +103,11 @@ public final class AppCoordinator {
     /// Kullanıcının "burası aslında şurası" düzeltmesi; geçerli olduğu sürece
     /// katalog eşleşmesini bastırır.
     private var manualSelection: ManualPlaceSelection?
+
+    /// Son elle düzeltmeden önceki hâl. Tek adımlık geri alma yeterli: kullanıcı
+    /// bir şeyi yanlış birleştirdiğinde hemen fark eder.
+    private var undoSnapshot: (history: [Session], current: Session?)?
+    private var isBatchingSuggestions = false
 
     /// Ağ kaç tick'te bir yoklanır. Wi-Fi değişimi anlık algılanmak zorunda
     /// değil; 10 saniyelik gecikme oturum sınırlarını gözle görülür biçimde
@@ -87,13 +123,18 @@ public final class AppCoordinator {
         preferencesStore = JSONFileStore(
             url: base.appendingPathComponent("preferences.json")
         )
+        suggestionStore = JSONFileStore(url: base.appendingPathComponent("suggestions.json"))
+        eventLog = EventLog(url: base.appendingPathComponent("events.log"))
     }
 
     // MARK: - Yaşam döngüsü
 
     public func start() async {
+        eventLog.prune()
+        eventLog.record("uygulama açıldı")
         catalog = (try? catalogStore.load()) ?? PlaceCatalog()
         history = (try? historyStore.load()) ?? []
+        suggestionState = (try? suggestionStore.load()) ?? SuggestionState()
         if let saved = try? preferencesStore.load() {
             preferences = saved
         } else {
@@ -116,10 +157,14 @@ public final class AppCoordinator {
         refreshPermissionFlags()
         needsNotificationPermission = await notifier.authorizationStatus() != .authorized
 
-        power.onSleep = { [weak self] in self?.apply(.sleep) }
-        power.onWake = { [weak self] in self?.apply(.wake) }
-        power.onScreenLocked = { [weak self] in self?.apply(.screenLocked) }
-        power.onScreenUnlocked = { [weak self] in self?.apply(.screenUnlocked) }
+        power.onSleep = { [weak self] in
+            self?.eventLog.record("uyku")
+            self?.apply(.sleep)
+        }
+        power.onWake = { [weak self] in
+            self?.eventLog.record("uyanma")
+            self?.apply(.wake)
+        }
         power.start()
 
         if location.isAuthorized { location.startUpdating() }
@@ -134,6 +179,7 @@ public final class AppCoordinator {
         handle(effects: restored.effects)
 
         startTicking()
+        refreshSuggestions()
         refreshDisplay()
     }
 
@@ -185,11 +231,18 @@ public final class AppCoordinator {
         guard location.isAuthorized else { return }
 
         let snapshot = WiFiReader.snapshot()
+        if snapshot != lastWiFi {
+            let accuracy = location.accuracy.map { "±\(Int($0))m" } ?? "konum yok"
+            eventLog.record(
+                "wifi ssid=\(snapshot.ssid ?? "-") bssid=\(snapshot.bssid ?? "-") \(accuracy)", at: now
+            )
+        }
         defer { lastWiFi = snapshot }
 
         // Manuel düzeltme, geçerli olduğu sürece katalog eşleşmesini bastırır.
         if let selection = manualSelection {
             if selection.applies(to: snapshot.ssid) {
+                logResolution("elle seçilmiş", at: now)
                 apply(.placeResolved(.known(selection.placeID)), at: now)
                 return
             }
@@ -202,20 +255,30 @@ public final class AppCoordinator {
                 catalog.attach(ssid: snapshot.ssid ?? "", bssid: bssid, to: place.id)
                 persistCatalog()
             }
+            logResolution("eşleşti \(place.displayName)", at: now)
             prompt = nil
             apply(.placeResolved(.known(place.id)), at: now)
 
         case .noNetwork:
+            logResolution("ağ yok", at: now)
             apply(.placeResolved(.unknown), at: now)
 
         case .possibleBranch(let existing):
+            logResolution("şube olabilir \(existing.displayName)", at: now)
             apply(.placeResolved(.unknown), at: now)
             Task { await askAboutBranch(snapshot: snapshot, existing: existing) }
 
         case .unknownNetwork(let nearby):
+            logResolution("tanınmayan ağ", at: now)
             apply(.placeResolved(.unknown), at: now)
             Task { await askAboutNewNetwork(snapshot: snapshot, nearby: nearby) }
         }
+    }
+
+    private func logResolution(_ text: String, at now: Date) {
+        guard text != lastLoggedResolution else { return }
+        lastLoggedResolution = text
+        eventLog.record("yer \(text)", at: now)
     }
 
     private func apply(_ event: SessionEvent, at now: Date = Date()) {
@@ -223,13 +286,31 @@ public final class AppCoordinator {
     }
 
     private func handle(effects: [SessionEffect]) {
+        // Motor oturumu kendisi değiştirdiyse eski anlık görüntü geçersiz.
+        let changesSessions = effects.contains { effect in
+            if case .markReached = effect { return false }
+            return true
+        }
+        if changesSessions {
+            undoSnapshot = nil
+            canUndo = false
+        }
         for effect in effects {
             switch effect {
-            case .sessionStarted:
+            case .sessionStarted(let session):
+                eventLog.record("oturum başladı \(session.id.uuidString.prefix(8)) yer=\(placeName(for: session.placeID))")
                 persistState(at: Date())
             case .sessionEnded(let session):
+                eventLog.record("oturum bitti \(session.id.uuidString.prefix(8)) süre=\(DurationFormat.readable(session.elapsed(at: Date())))")
                 history.append(session)
                 persistHistory()
+                refreshSuggestions()
+            case .sessionResumed(let session, let replacing):
+                eventLog.record("oturum geri açıldı \(session.id.uuidString.prefix(8)) katılan=\(replacing.count - 1)")
+                history.removeAll { replacing.contains($0.id) }
+                persistHistory()
+                persistState(at: Date())
+                refreshSuggestions()
             case .markReached(_, let elapsed, let placeID):
                 notifier.notifyMark(
                     elapsed: elapsed,
@@ -276,8 +357,9 @@ public final class AppCoordinator {
         catalog.add(place)
         persistCatalog()
         self.prompt = nil
-        apply(.placeResolved(.known(place.id)))
+        apply(.placeChosen(place.id))
         refreshDisplay()
+        refreshSuggestions()
     }
 
     /// Sorulan ağı zaten kayıtlı bir yere ekler (router'ın ikinci bandı gibi).
@@ -286,8 +368,9 @@ public final class AppCoordinator {
         catalog.attach(ssid: prompt.ssid, bssid: lastWiFi?.bssid, to: placeID)
         persistCatalog()
         self.prompt = nil
-        apply(.placeResolved(.known(placeID)))
+        apply(.placeChosen(placeID))
         refreshDisplay()
+        refreshSuggestions()
     }
 
     /// Panelden elle yer oluşturur ve oraya geçer.
@@ -321,6 +404,7 @@ public final class AppCoordinator {
         if let freeSSID { skippedSSIDs.remove(freeSSID) }
         persistCatalog()
         overrideCurrentPlace(place.id)
+        refreshSuggestions()
     }
 
     public func skipPrompt() {
@@ -349,12 +433,14 @@ public final class AppCoordinator {
             EngineConfiguration(preferences: preferences), at: Date()
         )
         refreshDisplay()
+        refreshSuggestions()
     }
 
     // MARK: - Manuel kontrol
 
     /// Sayacı sıfırlar: oturumu kapatıp aynı yerde yenisini başlatır.
     public func endCurrentSession() {
+        eventLog.record("kullanıcı sayacı sıfırladı")
         apply(.endSessionRequested)
         refreshDisplay()
     }
@@ -362,9 +448,10 @@ public final class AppCoordinator {
     /// "Burası aslında şurası" düzeltmesi. Seçim, o anki ağa bağlanır ve ağ
     /// değişene kadar otomatik eşleşmeyi bastırır.
     public func overrideCurrentPlace(_ placeID: UUID) {
+        eventLog.record("kullanıcı yeri seçti \(placeName(for: placeID))")
         manualSelection = ManualPlaceSelection(placeID: placeID, ssid: lastWiFi?.ssid)
         prompt = nil
-        apply(.placeResolved(.known(placeID)))
+        apply(.placeChosen(placeID))
         refreshDisplay()
     }
 
@@ -378,6 +465,7 @@ public final class AppCoordinator {
         catalog.rename(placeID, to: name)
         persistCatalog()
         refreshDisplay()
+        refreshSuggestions()
     }
 
     public func removePlace(_ placeID: UUID) {
@@ -385,6 +473,7 @@ public final class AppCoordinator {
         if manualSelection?.placeID == placeID { manualSelection = nil }
         persistCatalog()
         refreshDisplay()
+        refreshSuggestions()
     }
 
     public func detachSSID(_ ssid: String, from placeID: UUID) {
@@ -406,6 +495,10 @@ public final class AppCoordinator {
         else { return }
 
         catalog.merge(source, into: target)
+        // Geri alma eski yer kimliğini geri getirirdi; o yer artık katalogda yok.
+        undoSnapshot = nil
+        canUndo = false
+        eventLog.record("kullanıcı yer birleştirdi")
         history = SessionHistory.reassign(history, from: source, to: target)
         engine.reassignPlace(from: source, to: target)
         if let selection = manualSelection, selection.placeID == source {
@@ -416,28 +509,106 @@ public final class AppCoordinator {
         persistHistory()
         persistState(at: Date())
         refreshDisplay()
+        refreshSuggestions()
     }
 
     // MARK: - Oturum düzeltmeleri
 
-    /// Aralığa düşen oturumlar, en yenisi başta; açık oturum da dahil.
-    public func sessions(for range: StatsRange) -> [Session] {
-        sessionsIn(range, from: allSessions, now: Date())
-    }
-
     /// Süren oturum; listede silinemez olarak işaretlenir.
     public var currentSessionID: UUID? { engine.currentSession?.id }
 
-    /// Yanlış açılmış bir oturumu siler.
-    ///
-    /// Açık oturum silinmiyor: bir sayacı kendi altından çekmek yerine
-    /// paneldeki "Sayacı sıfırla" onu kapatıp yenisini açar, kapanan oturum da
-    /// listeye düşüp buradan silinebilir.
-    public func deleteSession(_ sessionID: UUID) {
-        guard engine.currentSession?.id != sessionID else { return }
-        history = SessionHistory.remove(sessionID, from: history)
+    public func session(id: UUID) -> Session? {
+        allSessions.first { $0.id == id }
+    }
+
+    public func previousSession(of id: UUID) -> Session? {
+        SessionHistory.previous(of: id, in: allSessions)
+    }
+
+    /// Yanlış açılmış oturumları siler. Açık oturum silinmez: paneldeki
+    /// "Sayacı sıfırla" onu kapatıp yenisini açar.
+    public func deleteSessions(_ ids: Set<UUID>) {
+        let removable = ids.subtracting([engine.currentSession?.id].compactMap { $0 })
+        guard !removable.isEmpty else { return }
+        recordUndo()
+        history.removeAll { removable.contains($0.id) }
+        eventLog.record("kullanıcı \(removable.count) oturum sildi")
+        commitHistoryEdit()
+    }
+
+    public func deleteSession(_ id: UUID) {
+        deleteSessions([id])
+    }
+
+    @discardableResult
+    public func mergeSessions(_ ids: Set<UUID>) -> SessionHistory.EditError? {
+        switch SessionHistory.merge(ids, in: allSessions) {
+        case .failure(let error):
+            return error
+        case .success(let merged):
+            eventLog.record("kullanıcı oturum birleştirdi")
+            recordUndo()
+            apply(edited: merged)
+            return nil
+        }
+    }
+
+    @discardableResult
+    public func mergeWithPrevious(_ id: UUID) -> SessionHistory.EditError? {
+        guard let previous = previousSession(of: id) else { return .tooFew }
+        return mergeSessions([previous.id, id])
+    }
+
+    public func validateEdit(_ session: Session) -> SessionHistory.EditError? {
+        if case .failure(let error) = SessionHistory.update(session, in: allSessions, now: Date()) {
+            return error
+        }
+        return nil
+    }
+
+    @discardableResult
+    public func updateSession(_ session: Session) -> SessionHistory.EditError? {
+        switch SessionHistory.update(session, in: allSessions, now: Date()) {
+        case .failure(let error):
+            return error
+        case .success(let updated):
+            eventLog.record("kullanıcı oturum düzenledi")
+            recordUndo()
+            apply(edited: updated)
+            return nil
+        }
+    }
+
+    public func undoLastEdit() {
+        guard let snapshot = undoSnapshot else { return }
+        history = snapshot.history
+        if let current = snapshot.current { engine.replaceCurrentSession(current) }
+        undoSnapshot = nil
+        canUndo = false
+        commitHistoryEdit()
+    }
+
+    private func recordUndo() {
+        guard !isBatchingSuggestions else { return }
+        undoSnapshot = (history, engine.currentSession)
+        canUndo = true
+    }
+
+    /// Düzeltilmiş tam listeyi (geçmiş + açık oturum) geri dağıtır.
+    private func apply(edited sessions: [Session]) {
+        if let open = sessions.first(where: { $0.endedAt == nil }) {
+            engine.replaceCurrentSession(open)
+        }
+        history = sessions.filter { $0.endedAt != nil }
+        commitHistoryEdit()
+    }
+
+    private func commitHistoryEdit() {
+        engine.forgetRecent()
         persistHistory()
+        persistState(at: Date())
         refreshDisplay()
+        refreshSuggestions()
     }
 
     // MARK: - Gizlilik
@@ -447,11 +618,13 @@ public final class AppCoordinator {
     /// Tercihler kalıyor: onlar kullanıcının nerede olduğunu değil, uygulamayı
     /// nasıl istediğini anlatıyor. Arayüz de bunu böyle söylüyor.
     public func eraseAllData() {
+        eventLog.erase()
         catalog = PlaceCatalog()
         history = []
         manualSelection = nil
         skippedSSIDs = []
         prompt = nil
+        suggestionState = SuggestionState()
         engine = SessionEngine(
             configuration: EngineConfiguration(preferences: preferences)
         )
@@ -460,19 +633,130 @@ public final class AppCoordinator {
         persistCatalog()
         persistHistory()
         persistState(at: Date())
+        persistSuggestionState()
+        refreshSuggestions()
         refreshDisplay()
+    }
+
+    public func revealEventLog() {
+        if !FileManager.default.fileExists(atPath: eventLog.url.path) {
+            eventLog.record("günlük açıldı")
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([eventLog.url])
     }
 
     // MARK: - İstatistik
 
-    public func totals(for range: StatsRange) -> [PlaceTotal] {
-        placeTotals(from: allSessions, range: range, now: Date())
+    public func totals(in period: StatsPeriod) -> [PlaceTotal] {
+        placeTotals(from: allSessions, in: period, now: Date())
+    }
+
+    public func totalSeconds(in period: StatsPeriod) -> TimeInterval {
+        PlaceTimerCore.totalSeconds(from: allSessions, in: period.interval, now: Date())
+    }
+
+    public func previousTotalSeconds(for period: StatsPeriod) -> TimeInterval {
+        previousComparableTotal(from: allSessions, for: period, now: Date())
+    }
+
+    public func dailyTotals(in period: StatsPeriod) -> [DayTotal] {
+        PlaceTimerCore.dailyTotals(from: allSessions, in: period, now: Date())
+    }
+
+    public func sessionDays(in period: StatsPeriod) -> [SessionDay] {
+        PlaceTimerCore.sessionDays(from: allSessions, in: period, now: Date())
+    }
+
+    public func segments(on day: Date) -> [DaySegment] {
+        daySegments(from: allSessions, on: day, now: Date())
+    }
+
+    public func csv(in period: StatsPeriod) -> String {
+        sessionsCSV(allSessions, in: period, now: Date()) { placeName(for: $0) }
     }
 
     /// Geçmiş ve açık oturum birlikte; istatistik ikisini de saymalı.
     private var allSessions: [Session] {
         guard let current = engine.currentSession else { return history }
         return history + [current]
+    }
+
+    // MARK: - Öneriler
+
+    /// Kullanıcı aynı türden aralığı üç kez birleştirdiyse ve eşik 1 saatin
+    /// altındaysa, ara eşiğini büyütmeyi önermek mantıklı.
+    public var offersLongerGap: Bool {
+        suggestionState.acceptedSplits >= 3 && preferences.gapThreshold < 3600
+    }
+
+    public func apply(_ suggestion: Suggestion) {
+        switch suggestion {
+        case .samePlace(let keep, let merge):
+            mergePlace(merge, into: keep)
+        case .splitSession(let first, let second):
+            if mergeSessions([first, second]) == nil {
+                suggestionState.acceptedSplits += 1
+            } else {
+                // Artık uygulanamıyor (arada başka oturum oluştu): bir daha sorma.
+                suggestionState.dismissed.insert(suggestion.id)
+            }
+        case .emptySession(let id):
+            deleteSession(id)
+        }
+        persistSuggestionState()
+        refreshSuggestions()
+    }
+
+    public func dismiss(_ suggestion: Suggestion) {
+        suggestionState.dismissed.insert(suggestion.id)
+        persistSuggestionState()
+        refreshSuggestions()
+    }
+
+    /// Hepsi tek geri alma adımıdır. Yer birleştirmesi varsa geri alma
+    /// kapanır: geçmişi eski yer kimliğine döndürmek silinmiş yer satırları
+    /// üretirdi.
+    public func applyAllSuggestions() {
+        let before = (history: history, current: engine.currentSession)
+        var mergedPlaces = false
+        isBatchingSuggestions = true
+        // Her uygulama listeyi yeniden kurar; sınır, uygulanamayan bir öneride
+        // sonsuz döngüye karşı.
+        for _ in 0..<200 {
+            guard let next = suggestions.first else { break }
+            if case .samePlace = next { mergedPlaces = true }
+            apply(next)
+        }
+        isBatchingSuggestions = false
+
+        if mergedPlaces {
+            undoSnapshot = nil
+            canUndo = false
+        } else if history != before.history {
+            undoSnapshot = before
+            canUndo = true
+        }
+    }
+
+    public func adoptLongerGap() {
+        var updated = preferences
+        updated.gapThreshold = 3600
+        suggestionState.acceptedSplits = 0
+        persistSuggestionState()
+        updatePreferences(updated)
+    }
+
+    private func refreshSuggestions() {
+        suggestions = PlaceTimerCore.suggestions(
+            places: catalog.places,
+            sessions: allSessions,
+            dismissed: suggestionState.dismissed,
+            gapThreshold: preferences.gapThreshold
+        )
+    }
+
+    private func persistSuggestionState() {
+        try? suggestionStore.save(suggestionState)
     }
 
     // MARK: - Diske yazma ve görüntü
@@ -487,17 +771,24 @@ public final class AppCoordinator {
 
     private func persistState(at now: Date) {
         try? stateStore.save(
-            AppState(currentSession: engine.currentSession, lastHeartbeatAt: now)
+            AppState(
+                currentSession: engine.currentSession,
+                lastHeartbeatAt: now,
+                recentlyEnded: engine.recentlyEnded
+            )
         )
     }
 
     private func refreshDisplay(now: Date = Date()) {
         elapsed = engine.elapsed(at: now)
-        activeSeconds = engine.activeSeconds
         placeName = placeName(for: engine.currentSession?.placeID)
 
-        todaySegments = daySegments(from: allSessions, on: now)
-        todayHereSeconds = placeTotals(from: allSessions, range: .today, now: now)
+        let today = StatsPeriod.containing(now, scope: .day)
+        let todayTotals = placeTotals(from: allSessions, in: today, now: now)
+        todaySegments = daySegments(from: allSessions, on: now, now: now)
+        todayTotalSeconds = todayTotals.reduce(0) { $0 + $1.totalSeconds }
+        placesTodayCount = todayTotals.count
+        todayHereSeconds = todayTotals
             .first { $0.placeID == engine.currentSession?.placeID }?
             .totalSeconds ?? 0
     }
