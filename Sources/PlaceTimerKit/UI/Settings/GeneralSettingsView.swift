@@ -14,7 +14,10 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section {
-                styleChooser
+                Picker("Görünüm", selection: $draft.menuBarStyle) {
+                    ForEach(MenuBarStyle.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                LabeledContent("Önizleme") { menuBarPreview }
                 Toggle("Saniyeleri göster", isOn: $draft.showSeconds)
                 Toggle("Yerin adını göster", isOn: $draft.showPlaceNameInMenuBar)
             } header: {
@@ -82,56 +85,24 @@ struct GeneralSettingsView: View {
         }
     }
 
-    /// Üç görünüm, menubar'daki hâlleriyle yan yana. Anahtarların ne
-    /// yaptığını anlatmak yerine gösteriyoruz: kartlardaki görüntü menubar'a
-    /// çizilen görüntünün ta kendisi, aynı işlevden üretiliyor.
-    private var styleChooser: some View {
-        HStack(spacing: Design.small) {
-            ForEach(MenuBarStyle.allCases, id: \.self) { style in
-                styleCard(style)
-            }
-        }
-        .padding(.vertical, Design.tight)
-        .animation(.snappy, value: draft)
-    }
-
-    private func styleCard(_ style: MenuBarStyle) -> some View {
-        let selected = draft.menuBarStyle == style
+    /// Anahtarların ne yaptığını anlatmak yerine gösteriyoruz: buradaki
+    /// görüntü menubar'a çizilen görüntünün ta kendisi, aynı işlevden üretiliyor.
+    private var menuBarPreview: some View {
         let title = MenuBarTitle.text(
             placeName: coordinator.placeName,
             elapsed: coordinator.elapsed,
             preferences: draft
         )
-        let image = MenuBarLabel.image(
-            for: title,
-            style: style,
-            progress: MenuBarStyle.hourProgress(coordinator.elapsed)
+        return Image(
+            nsImage: MenuBarLabel.image(
+                for: title,
+                style: draft.menuBarStyle,
+                progress: MenuBarStyle.hourProgress(coordinator.elapsed)
+            )
         )
-
-        return Button {
-            draft.menuBarStyle = style
-        } label: {
-            VStack(spacing: Design.small) {
-                Image(nsImage: image)
-                    .renderingMode(.template)
-                    .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 34)
-                    .background(.quaternary.opacity(0.6), in: .rect(cornerRadius: 8))
-                Text(style.displayName)
-                    .font(.caption)
-                    .foregroundStyle(selected ? .primary : .secondary)
-            }
-            .padding(Design.small)
-            .contentShape(.rect(cornerRadius: 12))
-            .background {
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 2)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(style.displayName)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .renderingMode(.template)
+        .foregroundStyle(.primary)
+        .accessibilityLabel(title)
     }
 
     @ViewBuilder

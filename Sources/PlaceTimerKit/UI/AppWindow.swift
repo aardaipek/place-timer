@@ -11,8 +11,8 @@ public final class AppWindow {
     private var closeObserver: NSObjectProtocol?
     private let title: String
 
-    /// Ayarlar penceresi tam boy içerik alır: başlık çubuğu saydam, araç
-    /// çubuğu yok, kabuğu (cam kenar çubuğu, başlık) SwiftUI çiziyor. Diğer
+    /// Ayarlar penceresi tam boy içerik ve sabit, boş bir birleşik araç
+    /// çubuğu alır; kenar çubuğu sistemin cam paneli. Diğer
     /// küçük pencereler (yer sorusu, ilk açılış) sade kalır.
     public enum Style {
         case standard
@@ -41,11 +41,10 @@ public final class AppWindow {
 
         let controller = NSHostingController(rootView: content())
         if style == .settings {
-            // Araç çubuğu köprüsü bilerek kapalı: bölümlerden biri araç
-            // çubuğuna düğme koyunca yalnızca o bölümde başlık çubuğu
-            // kalınlaşıyor, pencere düğmeleri büyüyüp yer değiştiriyordu.
+            // Başlık köprüleniyor, araç çubuğu köprülenmiyor: araç çubuğu
+            // aşağıda elle ve boş kuruluyor ki her bölümde aynı olsun.
             // Boyut da sabit: içerik değişince pencere yeniden ölçülmesin.
-            controller.sceneBridgingOptions = []
+            controller.sceneBridgingOptions = [.toolbars, .title]
             controller.sizingOptions = []
         }
         let window = NSWindow(contentViewController: controller)
@@ -58,10 +57,10 @@ public final class AppWindow {
             // yapışık düz bir sütun çiziliyordu; cam panel ancak içerik
             // başlık çubuğunun altına uzandığında çıkıyor.
             window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
-            window.titlebarAppearsTransparent = true
-            window.titleVisibility = .hidden
-            window.toolbar = nil
-            window.isMovableByWindowBackground = true
+            // Boş ama hep var olan araç çubuğu. Araç çubuğu bölümden bölüme
+            // gelip gidince pencere düğmeleri büyüyüp küçülüyordu.
+            window.toolbar = NSToolbar(identifier: "PlaceTimerSettings")
+            window.toolbarStyle = .unified
         }
         window.isReleasedWhenClosed = false
 

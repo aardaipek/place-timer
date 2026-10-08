@@ -29,12 +29,5 @@ enum Design {
     static let settingsPaneWidth: CGFloat = 520
     static let settingsWidth: CGFloat = settingsSidebarWidth + settingsPaneWidth
     static let settingsHeight: CGFloat = 560
-    /// Pencere düğmelerinin kapladığı şerit. Araç çubuğu olmadığı için
-    /// içerik başlık çubuğunun altına uzanıyor; bu boşluk düğmelerin yeri.
-    static let settingsTitlebarInset: CGFloat = 36
-    /// Bölüm başlığının yüksekliği, pencere düğmeleri şeridi dahil. Bölümden
-    /// bölüme değişmez; istatistiğin kontrolleri de bunun içine sığar.
-    static let settingsHeaderHeight: CGFloat = 76
-    static let settingsSidebarRadius: CGFloat = 14
 
 }

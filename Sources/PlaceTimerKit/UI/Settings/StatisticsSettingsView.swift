@@ -5,8 +5,7 @@ import SwiftUI
 ///
 /// Üstte asıl sorunun cevabı (toplam ve önceki dönemle fark), altında
 /// öneriler, yerler ve günlere bölünmüş oturumlar. Dönem seçimi ve gezinme
-/// ayarlar penceresinin başlığında (`StatsHeaderControls`); içerikte kontrol
-/// kalabalığı yok.
+/// listenin üstünde tek bir satırda (`StatsPeriodBar`).
 ///
 /// Oturumlar `List` içinde: seçim, ⌫ ile silme ve sağ tık menüsü `Form`'da
 /// yok. Satır içi "Sil" linkleri bu yüzden kalktı.
@@ -89,6 +88,9 @@ struct StatisticsSettingsView: View {
             }
         }
         .listStyle(.inset)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            StatsPeriodBar(navigation: navigation, coordinator: coordinator)
+        }
         .overlay {
             if days.isEmpty && coordinator.suggestions.isEmpty {
                 ContentUnavailableView {
