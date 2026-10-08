@@ -122,6 +122,8 @@ notarizasyon icindir — Developer ID ile dagitim yapilmadigi surece gerekmez.)
 
 **1.1.0 (7)** — 8 Ekim 2026: TestFlight'a yüklendi (iç test grubu "Ic Test"). Ayarlar sistemin kenar çubuğuna döndü; araç çubuğu her bölümde sabit.
 
+**1.1.0 (7) App Store incelemesine gönderildi** — 8 Ekim 2026. "Bu sürümde yenilikler" metni ve promosyon metni girildi; inceleme notunun eski "BUILD 4" paragrafı 1.1.0 değişiklik özetiyle değiştirildi. Yayın türü: onaydan sonra otomatik.
+
 ## Bilinen kirilganlik
 
 `AppCoordinator.init` veri klasorunu olusturamazsa sessizce
