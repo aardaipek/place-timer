@@ -120,6 +120,8 @@ notarizasyon icindir — Developer ID ile dagitim yapilmadigi surece gerekmez.)
 
 **1.1.0 (6)** — 7 Ekim 2026: TestFlight'a yüklendi (iç test grubu "Ic Test"). Sabit ayarlar kabuğu ve menubar halka/kapsül görünümü. 141 test ve `-warnings-as-errors` derlemesi temiz.
 
+**1.1.0 (7)** — 8 Ekim 2026: TestFlight'a yüklendi (iç test grubu "Ic Test"). Ayarlar sistemin kenar çubuğuna döndü; araç çubuğu her bölümde sabit.
+
 ## Bilinen kirilganlik
 
 `AppCoordinator.init` veri klasorunu olusturamazsa sessizce
